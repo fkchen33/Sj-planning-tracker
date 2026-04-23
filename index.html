@@ -1,0 +1,1754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<title>Planning Time Tracker — City of San Jacinto</title>
+<style>
+/* ── Reset & base ─────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:14px;background:#f4f5f7;color:#1a1a1a;min-height:100vh;}
+a{color:#185FA5;}
+
+/* ── Layout ───────────────────────────────────────────────── */
+.app-header{background:#fff;border-bottom:1px solid #e0e0e0;padding:0 20px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:100;}
+.app-logo{display:flex;align-items:center;gap:10px;}
+.logo-bar{width:5px;height:28px;background:#C00;border-radius:2px;}
+.logo-text{font-size:14px;font-weight:600;color:#1a1a1a;line-height:1.2;}
+.logo-sub{font-size:11px;color:#666;font-weight:400;}
+.sync-status{font-size:11px;display:flex;align-items:center;gap:5px;color:#666;}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:#ccc;}
+.sync-dot.syncing{background:#BA7517;animation:pulse 1s infinite;}
+.sync-dot.ok{background:#1D9E75;}
+.sync-dot.err{background:#E24B4A;}
+
+.container{max-width:860px;margin:0 auto;padding:16px 16px 40px;}
+.tab-bar{display:flex;gap:2px;background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:4px;margin-bottom:16px;flex-wrap:wrap;}
+.tab{padding:7px 14px;border-radius:7px;border:none;background:transparent;font-size:13px;cursor:pointer;color:#666;font-family:inherit;transition:background .12s;}
+.tab:hover{background:#f0f0f0;}
+.tab.active{background:#185FA5;color:#fff;font-weight:500;}
+
+/* ── Cards ────────────────────────────────────────────────── */
+.card{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:16px 20px;margin-bottom:14px;}
+.card-title{font-size:14px;font-weight:600;color:#1a1a1a;margin-bottom:12px;}
+.sub-tabs{display:flex;gap:2px;background:#f4f5f7;border-radius:8px;padding:3px;margin-bottom:14px;}
+.sub-tab{padding:6px 14px;border-radius:6px;border:none;font-size:12px;cursor:pointer;background:transparent;color:#666;font-family:inherit;}
+.sub-tab.active{background:#fff;color:#1a1a1a;font-weight:500;box-shadow:0 1px 3px rgba(0,0,0,.1);}
+
+/* ── Form elements ────────────────────────────────────────── */
+label{display:block;font-size:11px;color:#666;margin-bottom:3px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;}
+input,select,textarea{width:100%;padding:8px 11px;border:1px solid #d0d0d0;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:#1a1a1a;transition:border-color .15s;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#185FA5;box-shadow:0 0 0 3px rgba(24,95,165,.1);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+.grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;}
+.form-group{margin-bottom:12px;}
+
+/* ── Buttons ──────────────────────────────────────────────── */
+.btn{padding:8px 16px;border-radius:8px;border:1px solid #d0d0d0;background:#fff;color:#1a1a1a;font-size:13px;cursor:pointer;font-family:inherit;transition:all .12s;font-weight:500;}
+.btn:hover{background:#f4f5f7;}
+.btn:active{transform:scale(.98);}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+.btn-primary{background:#185FA5;color:#fff;border-color:#185FA5;}
+.btn-primary:hover{background:#0C447C;}
+.btn-danger{background:#A32D2D;color:#fff;border-color:#A32D2D;}
+.btn-warn{background:#854F0B;color:#fff;border-color:#854F0B;}
+.btn-success{background:#0F6E56;color:#fff;border-color:#0F6E56;}
+.btn-sm{padding:4px 10px;font-size:11px;}
+.btn-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+
+/* ── Timer ────────────────────────────────────────────────── */
+.timer-display{font-size:48px;font-weight:300;letter-spacing:3px;text-align:center;padding:12px 0 8px;color:#1a1a1a;font-variant-numeric:tabular-nums;}
+.status-bar{display:flex;align-items:center;gap:6px;justify-content:center;font-size:12px;color:#666;margin-bottom:6px;}
+.dot{width:8px;height:8px;border-radius:50%;}
+.dot-idle{background:#ccc;}
+.dot-running{background:#1D9E75;animation:pulse 1.2s infinite;}
+.dot-paused{background:#BA7517;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+
+/* ── Deposit bar ──────────────────────────────────────────── */
+.deposit-section{background:#f8f9fa;border:1px solid #e8e8e8;border-radius:10px;padding:14px 16px;margin-bottom:14px;}
+.dep-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+.dep-amount{font-size:24px;font-weight:600;}
+.dep-of{font-size:12px;color:#666;}
+.dep-bar-bg{height:10px;background:#e8e8e8;border-radius:5px;overflow:hidden;margin-bottom:5px;}
+.dep-bar-fill{height:100%;border-radius:5px;transition:width .5s,background .5s;}
+.dep-footer{display:flex;justify-content:space-between;font-size:11px;color:#666;}
+
+/* ── Metrics ──────────────────────────────────────────────── */
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:14px;}
+.metric-card{background:#f8f9fa;border-radius:10px;padding:12px 14px;}
+.metric-val{font-size:20px;font-weight:600;color:#1a1a1a;}
+.metric-lbl{font-size:11px;color:#666;margin-top:2px;}
+
+/* ── Tables ───────────────────────────────────────────────── */
+.data-table{width:100%;border-collapse:collapse;font-size:12px;}
+.data-table th{text-align:left;font-size:11px;font-weight:600;color:#666;padding:0 8px 8px 0;border-bottom:2px solid #e0e0e0;text-transform:uppercase;letter-spacing:.04em;}
+.data-table td{padding:9px 8px 9px 0;border-bottom:1px solid #f0f0f0;vertical-align:middle;}
+.data-table tr:last-child td{border-bottom:none;}
+.data-table tr:hover td{background:#fafafa;}
+
+/* ── Badges ───────────────────────────────────────────────── */
+.badge{display:inline-block;padding:2px 8px;border-radius:100px;font-size:11px;font-weight:600;}
+.b-proj{background:#dbeafe;color:#1e40af;}
+.b-plan{background:#ede9fe;color:#4c1d95;}
+.b-manual{background:#fef3c7;color:#92400e;}
+.b-timer{background:#f0fdf4;color:#166534;}
+.b-green{background:#d1fae5;color:#065f46;}
+.b-amber{background:#fef3c7;color:#92400e;}
+.b-red{background:#fee2e2;color:#991b1b;}
+
+/* ── Session rows ─────────────────────────────────────────── */
+.srow{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #f0f0f0;font-size:12px;}
+.srow:last-child{border-bottom:none;}
+
+/* ── Toast ────────────────────────────────────────────────── */
+.toast{background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:10px 14px;font-size:13px;color:#065f46;margin-bottom:12px;display:none;}
+.toast.err{background:#fee2e2;border-color:#fca5a5;color:#991b1b;}
+
+/* ── Progress bar (report) ────────────────────────────────── */
+.pbar-row{display:flex;align-items:center;gap:10px;margin-bottom:9px;}
+.pbar-lbl{font-size:12px;min-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pbar-bg{flex:1;background:#f0f0f0;border-radius:4px;height:12px;overflow:hidden;}
+.pbar-fill{height:100%;border-radius:4px;}
+.pbar-val{font-size:12px;color:#666;min-width:52px;text-align:right;}
+
+/* ── Planner comparison cards ─────────────────────────────── */
+.pc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px;}
+.pc-card{background:#f8f9fa;border-radius:10px;padding:12px 14px;}
+.pc-name{font-size:13px;font-weight:600;margin-bottom:4px;}
+
+/* ── Worksheet ────────────────────────────────────────────── */
+.ws{background:#fff;color:#111;font-family:Arial,sans-serif;font-size:9.5px;border:1px solid #ccc;}
+.ws-title{text-align:center;font-size:15px;font-weight:700;padding:8px 0 3px;}
+.ws-hdr{display:flex;justify-content:space-between;padding:5px 10px 0;}
+.ws-emp{font-size:10px;line-height:1.7;}
+.ws-mon{font-size:12px;font-weight:700;}
+.ws-red{height:5px;background:#C00;margin:4px 0;}
+.ws-tbl{width:100%;border-collapse:collapse;table-layout:fixed;}
+.ws-tbl th{background:#ddd;border:1px solid #bbb;padding:2px 3px;text-align:center;font-size:8.5px;font-weight:700;white-space:nowrap;}
+.ws-tbl th.lh{text-align:left;}
+.ws-tbl td{border:1px solid #ccc;padding:2px 3px;font-size:8.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ws-tbl td.nr{text-align:right;}
+.ws-tbl td.nc{text-align:center;}
+.ws-tbl tr.tr-tot td{background:#f0f0f0;font-weight:700;border-top:2px solid #888;}
+.ws-tbl td.fee-tot{background:#FFD700;}
+.ws-tbl td.dh{background:#d4edda;text-align:center;font-weight:700;}
+.ws-tbl td.de{text-align:center;color:#ddd;}
+.ws-foot{padding:8px 10px 6px;border-top:1px solid #ccc;display:flex;justify-content:space-between;}
+.sig-l{border-bottom:1px solid #111;min-width:130px;display:inline-block;vertical-align:bottom;}
+.sig-s{font-size:7.5px;text-align:center;display:block;margin-top:1px;color:#555;}
+
+/* ── Legend ───────────────────────────────────────────────── */
+.lgd{display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:10px;}
+.lgd-i{display:flex;align-items:center;gap:4px;font-size:11px;color:#666;}
+.lgd-sw{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
+
+/* ── Divider ──────────────────────────────────────────────── */
+.divider{border:none;border-top:1px solid #f0f0f0;margin:12px 0;}
+.empty{text-align:center;padding:24px;color:#999;font-style:italic;font-size:13px;}
+
+/* ── Loading overlay ──────────────────────────────────────── */
+#loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:12px;}
+.spinner{width:32px;height:32px;border:3px solid #e0e0e0;border-top-color:#185FA5;border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:13px;color:#666;}
+
+@media(max-width:600px){
+  .grid2,.grid3,.grid4{grid-template-columns:1fr;}
+  .timer-display{font-size:36px;}
+}
+@media print{
+  body{background:#fff;}
+  .no-print{display:none!important;}
+  @page{margin:.4in;size:landscape;}
+}
+
+/* ── PIN lock screen ──────────────────────────────────────── */
+#pin-screen{position:fixed;inset:0;background:#f4f5f7;display:flex;align-items:center;justify-content:center;z-index:99999;}
+.pin-card{background:#fff;border:1px solid #e0e0e0;border-radius:16px;padding:36px 40px;width:100%;max-width:360px;text-align:center;}
+.pin-logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:24px;}
+.pin-logo-bar{width:5px;height:28px;background:#C00;border-radius:2px;}
+.pin-logo-text{font-size:14px;font-weight:600;color:#1a1a1a;text-align:left;line-height:1.3;}
+.pin-logo-sub{font-size:11px;color:#666;font-weight:400;}
+.pin-title{font-size:16px;font-weight:600;color:#1a1a1a;margin-bottom:6px;}
+.pin-subtitle{font-size:13px;color:#666;margin-bottom:24px;}
+.pin-dots{display:flex;justify-content:center;gap:12px;margin-bottom:20px;}
+.pin-dot{width:14px;height:14px;border-radius:50%;background:#e0e0e0;transition:background .15s;}
+.pin-dot.filled{background:#185FA5;}
+.pin-dot.error{background:#E24B4A;animation:shake .3s ease;}
+@keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-4px);}75%{transform:translateX(4px);}}
+.pin-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:220px;margin:0 auto 16px;}
+.pin-key{padding:14px;border:1px solid #e0e0e0;border-radius:10px;background:#fff;font-size:18px;font-weight:500;cursor:pointer;transition:all .1s;color:#1a1a1a;font-family:inherit;}
+.pin-key:hover{background:#f4f5f7;border-color:#d0d0d0;}
+.pin-key:active{transform:scale(.95);background:#e8f0fb;border-color:#185FA5;}
+.pin-error{font-size:12px;color:#E24B4A;height:18px;margin-top:4px;}
+.pin-hint{font-size:11px;color:#999;margin-top:16px;}
+</style>
+
+<!-- PIN logic defined immediately in head — before any body content -->
+<script>
+var APP_PIN = '7291';
+var pinEntry = '';
+
+function pinKey(digit) {
+  if (pinEntry.length >= 4) return;
+  pinEntry += digit;
+  updatePinDots();
+  if (pinEntry.length === 4) { setTimeout(checkPin, 120); }
+}
+function pinBack() {
+  pinEntry = pinEntry.slice(0, -1);
+  updatePinDots();
+  var e = document.getElementById('pin-error');
+  if (e) e.textContent = '';
+}
+function pinClear() {
+  pinEntry = '';
+  updatePinDots();
+  var e = document.getElementById('pin-error');
+  if (e) e.textContent = '';
+}
+function updatePinDots() {
+  for (var i = 0; i < 4; i++) {
+    var d = document.getElementById('pd' + i);
+    if (!d) continue;
+    if (i < pinEntry.length) {
+      d.style.background = '#185FA5';
+    } else {
+      d.style.background = '#e0e0e0';
+    }
+  }
+}
+function checkPin() {
+  if (pinEntry === APP_PIN) {
+    sessionStorage.setItem('sj_pin_ok', '1');
+    var ps = document.getElementById('pin-screen');
+    if (ps) ps.style.display = 'none';
+    if (typeof init === 'function') init();
+  } else {
+    for (var i = 0; i < 4; i++) {
+      var d = document.getElementById('pd' + i);
+      if (d) d.style.background = '#E24B4A';
+    }
+    var e = document.getElementById('pin-error');
+    if (e) e.textContent = 'Incorrect PIN — try again';
+    setTimeout(function() { pinEntry = ''; updatePinDots(); }, 900);
+  }
+}
+</script>
+
+</head>
+<body>
+
+<!-- PIN lock screen -->
+<div id="pin-screen">
+  <div class="pin-card">
+    <div class="pin-logo">
+      <div class="pin-logo-bar"></div>
+      <div class="pin-logo-text">Planning Time Tracker<br/><span class="pin-logo-sub">City of San Jacinto</span></div>
+    </div>
+    <div class="pin-title">Enter access PIN</div>
+    <div class="pin-subtitle">Contact your division lead if you need the PIN</div>
+    <div class="pin-dots" id="pin-dots">
+      <div class="pin-dot" id="pd0" style="width:14px;height:14px;border-radius:50%;background:#e0e0e0;display:inline-block;transition:background .15s;"></div>
+      <div class="pin-dot" id="pd1" style="width:14px;height:14px;border-radius:50%;background:#e0e0e0;display:inline-block;transition:background .15s;"></div>
+      <div class="pin-dot" id="pd2" style="width:14px;height:14px;border-radius:50%;background:#e0e0e0;display:inline-block;transition:background .15s;"></div>
+      <div class="pin-dot" id="pd3" style="width:14px;height:14px;border-radius:50%;background:#e0e0e0;display:inline-block;transition:background .15s;"></div>
+    </div>
+    <div class="pin-keypad">
+      <button class="pin-key" onclick="pinKey('1')">1</button>
+      <button class="pin-key" onclick="pinKey('2')">2</button>
+      <button class="pin-key" onclick="pinKey('3')">3</button>
+      <button class="pin-key" onclick="pinKey('4')">4</button>
+      <button class="pin-key" onclick="pinKey('5')">5</button>
+      <button class="pin-key" onclick="pinKey('6')">6</button>
+      <button class="pin-key" onclick="pinKey('7')">7</button>
+      <button class="pin-key" onclick="pinKey('8')">8</button>
+      <button class="pin-key" onclick="pinKey('9')">9</button>
+      <button class="pin-key" onclick="pinClear()" style="font-size:13px;color:#666;">Clear</button>
+      <button class="pin-key" onclick="pinKey('0')">0</button>
+      <button class="pin-key" onclick="pinBack()" style="font-size:13px;color:#666;">&#9003;</button>
+    </div>
+    <div class="pin-error" id="pin-error"></div>
+    <div class="pin-hint">Session stays unlocked until you close this tab</div>
+  </div>
+</div>
+
+<!-- Loading overlay — hidden by default, app loads instantly -->
+<div id="loading-overlay" style="display:none;"></div>
+
+<!-- App header -->
+<header class="app-header no-print">
+  <div class="app-logo">
+    <div class="logo-bar"></div>
+    <div class="logo-text">Planning Time Tracker<br/><span class="logo-sub">City of San Jacinto — Planning Division</span></div>
+  </div>
+  <div class="sync-status">
+    <div class="sync-dot" id="sync-dot"></div>
+    <span id="sync-lbl">Connecting…</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Main tabs -->
+  <div class="tab-bar no-print">
+    <button class="tab active" onclick="showTab('tracker')">Timer</button>
+    <button class="tab" onclick="showTab('manual')">Manual entry</button>
+    <button class="tab" onclick="showTab('log')">Session log</button>
+    <button class="tab" onclick="showTab('report')">Report</button>
+    <button class="tab" onclick="showTab('projects')">Projects &amp; Plans</button>
+  </div>
+
+  <!-- ── TIMER ──────────────────────────────────────────────── -->
+  <div id="tab-tracker">
+    <div class="card">
+      <!-- Row 1: Project selector -->
+      <div class="form-group">
+        <label>Project</label>
+        <select id="t-proj" onchange="onTProj()"><option value="">— select project —</option></select>
+      </div>
+      <!-- Row 2: Plan selector — appears after project is chosen -->
+      <div class="form-group" id="t-plan-wrap" style="display:none;">
+        <label>Plan <span style="font-weight:400;color:#666;font-size:11px;">(select which plan you are working on)</span></label>
+        <select id="t-plan" onchange="onTPlan()"><option value="">— select plan —</option></select>
+      </div>
+      <div class="grid2" style="margin-bottom:12px;">
+        <div class="form-group" style="margin:0;">
+          <label>Activity type</label>
+          <select id="t-act"><option value="">— select —</option>
+            <option>Pre-application meeting</option><option>Application intake review</option>
+            <option>Plan review — initial</option><option>Plan review — resubmittal</option>
+            <option>Conditions of approval</option><option>CEQA review</option>
+            <option>Staff report preparation</option><option>Public hearing preparation</option>
+            <option>Site inspection</option><option>Agency coordination</option>
+            <option>Applicant correspondence</option><option>Administrative processing</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>Planner</label>
+          <select id="t-planner"></select>
+        </div>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>Notes</label>
+        <input type="text" id="t-note" placeholder="Optional detail…"/>
+      </div>
+    </div>
+
+    <div id="t-dep" style="display:none;">
+      <div class="deposit-section">
+        <!-- Project consolidated balance -->
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+            <label style="margin:0;">Project total balance</label>
+            <span style="font-size:11px;color:#666;" id="d-proj-name"></span>
+          </div>
+          <div class="dep-header">
+            <span class="dep-amount" id="d-proj-rem">$0.00</span>
+            <span class="dep-of" id="d-proj-lbl"></span>
+          </div>
+          <div class="dep-bar-bg"><div class="dep-bar-fill" id="d-proj-bar" style="width:100%;background:#1D9E75;"></div></div>
+          <div class="dep-footer"><span id="d-proj-pct"></span><span style="color:#666;font-size:11px;">All plans combined</span></div>
+        </div>
+        <!-- Plan individual balance -->
+        <div id="d-plan-section" style="display:none;padding-top:10px;border-top:1px solid #e8e8e8;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+            <label style="margin:0;font-size:11px;">This plan&apos;s balance</label>
+            <span style="font-size:11px;color:#666;" id="d-plan-name"></span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+            <span style="font-size:16px;font-weight:600;" id="d-plan-rem">$0.00</span>
+            <span style="font-size:11px;color:#666;" id="d-plan-lbl"></span>
+          </div>
+          <div class="dep-bar-bg"><div class="dep-bar-fill" id="d-plan-bar" style="width:100%;background:#378ADD;"></div></div>
+          <div class="dep-footer"><span id="d-plan-pct"></span><span>$160/hr</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="text-align:center;">
+      <div class="status-bar"><span class="dot dot-idle" id="sdot"></span><span id="stxt">Idle — select a project to begin</span></div>
+      <div class="timer-display" id="tdisp">00:00:00</div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-s" onclick="startTimer()">Start</button>
+        <button class="btn btn-warn" id="btn-p" onclick="pauseTimer()" disabled>Pause</button>
+        <button class="btn btn-danger" id="btn-x" onclick="stopTimer()" disabled>Stop &amp; save</button>
+      </div>
+    </div>
+
+    <div class="metric-grid">
+      <div class="metric-card"><div class="metric-val" id="m-td">0h 00m</div><div class="metric-lbl">Today</div></div>
+      <div class="metric-card"><div class="metric-val" id="m-wk">0h 00m</div><div class="metric-lbl">This week</div></div>
+      <div class="metric-card"><div class="metric-val" id="m-all">0</div><div class="metric-lbl">Sessions total</div></div>
+    </div>
+  </div>
+
+  <!-- ── MANUAL ENTRY ───────────────────────────────────────── -->
+  <div id="tab-manual" style="display:none;">
+    <div id="man-toast" class="toast"></div>
+    <div class="card">
+      <div class="card-title">Log a session manually</div>
+      <div class="grid2" style="margin-bottom:12px;">
+        <div class="form-group" style="margin:0;">
+          <label>Project</label>
+          <select id="m-proj" onchange="onMProj()"><option value="">— select project —</option></select>
+        </div>
+        <div class="form-group" style="margin:0;"><label>Date</label><input type="date" id="m-date"/></div>
+      </div>
+      <div class="form-group" id="m-plan-wrap" style="display:none;margin-bottom:12px;">
+        <label>Plan</label>
+        <select id="m-plan" onchange="updPrev()"><option value="">— select plan —</option></select>
+      </div>
+      <div class="grid2" style="margin-bottom:12px;">
+        <div class="form-group" style="margin:0;"><label>Activity type</label>
+          <select id="m-act"><option value="">— select —</option>
+            <option>Pre-application meeting</option><option>Application intake review</option>
+            <option>Plan review — initial</option><option>Plan review — resubmittal</option>
+            <option>Conditions of approval</option><option>CEQA review</option>
+            <option>Staff report preparation</option><option>Public hearing preparation</option>
+            <option>Site inspection</option><option>Agency coordination</option>
+            <option>Applicant correspondence</option><option>Administrative processing</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;"><label>Planner</label><select id="m-planner"></select></div>
+      </div>
+      <div class="grid2" style="margin-bottom:12px;">
+        <div class="form-group" style="margin:0;"><label>Hours</label><input type="number" id="m-h" placeholder="0" min="0" max="24" step="0.25" oninput="updPrev()"/></div>
+        <div class="form-group" style="margin:0;"><label>Minutes</label><input type="number" id="m-m" placeholder="0" min="0" max="59" step="15" oninput="updPrev()"/></div>
+      </div>
+      <div class="form-group"><label>Notes</label><input type="text" id="m-note" placeholder="What were you working on?"/></div>
+      <div id="m-prev" style="display:none;background:#f8f9fa;border-radius:8px;padding:10px 13px;margin-bottom:12px;font-size:12px;color:#666;"></div>
+      <div style="display:flex;gap:8px;"><button class="btn btn-success" onclick="saveMan()">Save session</button><button class="btn" onclick="clearMan()">Clear</button></div>
+    </div>
+    <div class="card"><div class="card-title">Recent manual entries</div><div id="man-recent"><div class="empty">No manual entries yet.</div></div></div>
+  </div>
+
+  <!-- ── SESSION LOG ────────────────────────────────────────── -->
+  <div id="tab-log" style="display:none;">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div class="card-title" style="margin:0;">All sessions</div>
+        <select id="log-filter" onchange="renderLog()" style="width:auto;padding:5px 9px;font-size:12px;">
+          <option value="">All entries</option><option value="timer">Timer only</option><option value="manual">Manual only</option>
+        </select>
+      </div>
+      <div id="log-list"><div class="empty">No sessions yet.</div></div>
+    </div>
+  </div>
+
+  <!-- ── REPORT ─────────────────────────────────────────────── -->
+  <div id="tab-report" style="display:none;">
+    <div class="sub-tabs no-print">
+      <button class="sub-tab active" onclick="showSub('rpt-s')">Summary report</button>
+      <button class="sub-tab" onclick="showSub('rpt-w')">Accounting worksheet</button>
+    </div>
+
+    <!-- Summary -->
+    <div id="rpt-s">
+      <div class="card">
+        <div class="grid2" style="margin-bottom:10px;">
+          <div class="form-group" style="margin:0;"><label>From</label><input type="text" id="r-from" placeholder="mm/dd/yyyy"/></div>
+          <div class="form-group" style="margin:0;"><label>To</label><input type="text" id="r-to" placeholder="mm/dd/yyyy"/></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <button class="btn" onclick="setWeek()">This week</button>
+          <button class="btn" onclick="setMonth()">This month</button>
+          <div style="flex:1;min-width:130px;"><label>Planner</label>
+            <select id="r-planner"><option value="">All planners</option></select></div>
+          <div style="display:flex;align-items:flex-end;gap:8px;">
+            <button class="btn btn-primary" onclick="genReport()">Generate</button>
+            <button class="btn" onclick="exportCSV()">Export CSV</button>
+          </div>
+        </div>
+        <div id="rpt-out"><div class="empty">Set a date range and click Generate.</div></div>
+      </div>
+    </div>
+
+    <!-- Worksheet -->
+    <div id="rpt-w" style="display:none;">
+      <div class="card no-print">
+        <div class="grid3" style="margin-bottom:10px;">
+          <div class="form-group" style="margin:0;"><label>Planner</label><select id="ws-planner"></select></div>
+          <div class="form-group" style="margin:0;"><label>Month</label>
+            <select id="ws-month"><option value="0">January</option><option value="1">February</option><option value="2">March</option><option value="3">April</option><option value="4">May</option><option value="5">June</option><option value="6">July</option><option value="7">August</option><option value="8">September</option><option value="9">October</option><option value="10">November</option><option value="11">December</option></select></div>
+          <div class="form-group" style="margin:0;"><label>Year</label><select id="ws-year"></select></div>
+        </div>
+        <div class="grid3" style="margin-bottom:0;">
+          <div class="form-group" style="margin:0;"><label>Employee #</label><input type="text" id="ws-emp" placeholder="e.g. 6124"/></div>
+          <div class="form-group" style="margin:0;"><label>Supervisor name</label><input type="text" id="ws-sup" placeholder="Supervisor"/></div>
+          <div style="display:flex;align-items:flex-end;gap:8px;">
+            <button class="btn btn-primary" onclick="genWS()" style="flex:1;">Generate</button>
+            <button class="btn" onclick="printWS()">Print / PDF</button>
+          </div>
+        </div>
+      </div>
+      <div style="overflow-x:auto;" id="ws-out"><div class="empty">Select planner and month, then click Generate.</div></div>
+    </div>
+  </div>
+
+  <!-- ── PROJECTS & PLANS ───────────────────────────────────── -->
+  <div id="tab-projects" style="display:none;">
+    <div id="dep-toast" class="toast"></div>
+    <div class="card">
+      <div class="card-title">Projects &amp; Plans</div>
+      <div id="rec-tbl"><div class="empty">Loading…</div></div>
+      <div id="dep-modal" style="display:none;margin-top:12px;background:#f8f9fa;border-radius:10px;padding:14px 16px;">
+        <div class="card-title" id="dep-mod-title" style="margin-bottom:10px;"></div>
+        <div class="grid3" style="margin-bottom:10px;">
+          <div class="form-group" style="margin:0;"><label>Amount ($)</label><input type="number" id="da-amt" placeholder="5000" min="0"/></div>
+          <div class="form-group" style="margin:0;"><label>Date</label><input type="date" id="da-date"/></div>
+          <div class="form-group" style="margin:0;"><label>Note</label><input type="text" id="da-note" placeholder="e.g. Supplemental deposit"/></div>
+        </div>
+        <div style="display:flex;gap:8px;"><button class="btn btn-success" onclick="saveDep()">Add deposit</button><button class="btn" onclick="document.getElementById('dep-modal').style.display='none'">Cancel</button></div>
+      </div>
+      <div id="hist-panel" style="display:none;margin-top:12px;background:#f8f9fa;border-radius:10px;padding:14px 16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div class="card-title" id="hist-title" style="margin:0;"></div>
+          <button class="btn btn-sm" onclick="document.getElementById('hist-panel').style.display='none'">Close</button>
+        </div>
+        <div id="hist-list"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Add new Plan</div>
+      <p style="font-size:12px;color:#666;margin-bottom:14px;">Plans are where deposits and fees are tracked. Each Plan must belong to a Project. You can link to an existing Project or create a new one inline.</p>
+
+      <!-- Plan details -->
+      <div class="grid3" style="margin-bottom:10px;">
+        <div class="form-group" style="margin:0;"><label>Plan case number</label><input type="text" id="np-case" placeholder="USE26-0045"/></div>
+        <div class="form-group" style="margin:0;"><label>Plan name</label><input type="text" id="np-name" placeholder="e.g. Minor Use Permit"/></div>
+        <div class="form-group" style="margin:0;"><label>Applicant</label><input type="text" id="np-app" placeholder="Applicant name"/></div>
+      </div>
+      <div class="grid3" style="margin-bottom:14px;">
+        <div class="form-group" style="margin:0;"><label>Plan type</label>
+          <select id="np-type"><option>Conditional Use Permit</option><option>Minor Use Permit</option><option>Site Plan Review</option><option>Design Review</option><option>Tentative Tract Map</option><option>Tentative Parcel Map</option><option>Variance</option><option>Specific Plan</option><option>Environmental Review</option><option>General Plan Amendment</option><option>Zone Change</option><option>Other</option></select></div>
+        <div class="form-group" style="margin:0;"><label>Initial deposit ($)</label><input type="number" id="np-dep" placeholder="5000" min="0"/></div>
+        <div></div>
+      </div>
+
+      <!-- Parent Project -->
+      <div style="background:#f8f9fa;border-radius:10px;padding:14px 16px;margin-bottom:10px;">
+        <div class="card-title" style="font-size:13px;margin-bottom:10px;">Parent Project</div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label>Link to existing Project</label>
+          <select id="np-par" onchange="onNpParChange()"><option value="">-- create new project below --</option></select>
+        </div>
+        <div id="np-new-proj-wrap">
+          <p style="font-size:11px;color:#666;margin-bottom:8px;">No existing project selected — fill in below to create one automatically:</p>
+          <div class="grid2">
+            <div class="form-group" style="margin:0;"><label>Project case number</label><input type="text" id="np-proj-case" placeholder="PROJ26-0024"/></div>
+            <div class="form-group" style="margin:0;"><label>Project name</label><input type="text" id="np-proj-name" placeholder="e.g. State Street Commercial Center"/></div>
+          </div>
+        </div>
+        <div id="np-existing-proj-info" style="display:none;font-size:12px;color:#0C447C;padding:6px 0;"></div>
+      </div>
+
+      <button class="btn btn-primary" onclick="addPlan()" style="min-width:140px;">Add Plan</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Planners</div>
+      <p style="font-size:12px;color:#666;margin-bottom:12px;">Add or remove planners who appear in the dropdown across the app. Changes sync to Google Sheets.</p>
+      <div id="planner-list-ui"></div>
+      <div class="divider"></div>
+      <div style="display:flex;gap:8px;align-items:flex-end;">
+        <div style="flex:1;"><label>Add planner</label><input type="text" id="new-planner-input" placeholder="Full name e.g. Maria Lopez" onkeydown="if(event.key==='Enter')addPlanner()"/></div>
+        <button class="btn btn-primary" onclick="addPlanner()">Add</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Data management</div>
+      <p style="font-size:12px;color:#666;margin-bottom:14px;">Use these tools to sync or reset your local app data. Your Google Sheet is always the source of truth.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;background:#f0fdf4;border:1px solid #6ee7b7;border-radius:10px;padding:14px;">
+          <div style="font-size:13px;font-weight:600;color:#065f46;margin-bottom:5px;">Sync from Google Sheets</div>
+          <p style="font-size:12px;color:#065f46;margin-bottom:10px;">Reload all data fresh from your Sheet. Use this if you edited the Sheet directly or data looks out of date.</p>
+          <button class="btn btn-success" onclick="syncFromSheet()" style="width:100%;">Sync now</button>
+        </div>
+        <div style="flex:1;min-width:200px;background:#fff8f0;border:1px solid #fca5a5;border-radius:10px;padding:14px;">
+          <div style="font-size:13px;font-weight:600;color:#991b1b;margin-bottom:5px;">Clear local cache</div>
+          <p style="font-size:12px;color:#991b1b;margin-bottom:10px;">Removes old data stored in this browser only. Your Google Sheet is not affected. App will reload fresh from Sheets.</p>
+          <button class="btn btn-danger" onclick="clearLocalCache()" style="width:100%;">Clear cache &amp; reload</button>
+        </div>
+      </div>
+      <div id="sync-result" style="display:none;margin-top:12px;font-size:12px;color:#065f46;background:#f0fdf4;border-radius:8px;padding:10px 14px;"></div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyajqiAyv5RcoGgS6g_X_dQp0mzcslVRjk3y6KllHc4zcdqEKbxcRGwWa5eIjOAFFWC/exec';
+var RATE = 160;
+var PAL = ['#1D9E75','#378ADD','#D85A30','#7F77DD','#BA7517','#D4537E','#639922','#185FA5','#993C1D','#534AB7','#0F6E56','#EF9F27','#993556','#3B6D11','#085041','#E24B4A','#5DCAA5','#85B7EB'];
+var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+var DOWS = ['Su','M','T','W','Th','F','Sa'];
+
+var records = [], sessions = [], deposits = [], planners = ['Frank','Maria','David','Sarah'];
+var tInt = null, elapsed = 0, startT = null, running = false, paused = false, aIdx = -1;
+var depIdx = -1, rptChart = null;
+
+// ── JSONP API ─────────────────────────────────────────────────
+function api(params) {
+  return new Promise(function(resolve, reject) {
+    setSyncStatus('syncing');
+    var cbName = 'sjcb_' + Date.now() + '_' + Math.floor(Math.random()*10000);
+    var qs = new URLSearchParams();
+    qs.set('callback', cbName);
+    if (params.method === 'GET') {
+      var keys = Object.keys(params.query);
+      for (var i=0; i<keys.length; i++) qs.set(keys[i], params.query[keys[i]]);
+    } else {
+      qs.set('action', params.body.action);
+      if (params.body.data) qs.set('data', encodeURIComponent(JSON.stringify(params.body.data)));
+    }
+    var timer = setTimeout(function() {
+      cleanup(); setSyncStatus('err','Timed out'); reject(new Error('timeout'));
+    }, 15000);
+    function cleanup() {
+      clearTimeout(timer); delete window[cbName];
+      var s = document.getElementById('jsonp_' + cbName);
+      if (s) s.remove();
+    }
+    window[cbName] = function(data) {
+      cleanup();
+      if (data.success) { setSyncStatus('ok'); resolve(data.data); }
+      else { setSyncStatus('err', data.error); reject(new Error(data.error)); }
+    };
+    var script = document.createElement('script');
+    script.id = 'jsonp_' + cbName;
+    script.src = SCRIPT_URL + '?' + qs.toString();
+    script.onerror = function() { cleanup(); setSyncStatus('err','Load failed'); reject(new Error('load failed')); };
+    document.head.appendChild(script);
+  });
+}
+
+function setSyncStatus(state, msg) {
+  var dot = document.getElementById('sync-dot');
+  var lbl = document.getElementById('sync-lbl');
+  if (!dot || !lbl) return;
+  dot.className = 'sync-dot ' + state;
+  if (state === 'ok') lbl.textContent = 'Synced to Google Sheets';
+  else if (state === 'syncing') lbl.textContent = 'Syncing...';
+  else lbl.textContent = 'Offline — ' + (msg || '');
+}
+
+// ── Init ──────────────────────────────────────────────────────
+function bootApp() {
+  records  = JSON.parse(localStorage.getItem('sj_records')  || '[]');
+  sessions = JSON.parse(localStorage.getItem('sj_sessions') || '[]');
+  deposits = JSON.parse(localStorage.getItem('sj_deposits') || '[]');
+  renderPlannerDropdowns();
+  rDrop();
+  updMetrics();
+  var now = new Date();
+  var yrs = document.getElementById('ws-year');
+  if (yrs && !yrs.options.length) {
+    for (var y = now.getFullYear()-1; y <= now.getFullYear()+1; y++) {
+      var o = document.createElement('option');
+      o.value = y; o.textContent = y;
+      if (y === now.getFullYear()) o.selected = true;
+      yrs.appendChild(o);
+    }
+  }
+  var wm = document.getElementById('ws-month');
+  if (wm) wm.value = now.getMonth();
+  var md = document.getElementById('m-date');
+  if (md) md.value = now.toISOString().split('T')[0];
+  setSyncStatus('syncing');
+  setTimeout(function() {
+    api({ method: 'GET', query: { action: 'getAll' } })
+      .then(function(data) {
+        if (data && data.projects)  records  = data.projects;
+        if (data && data.sessions)  sessions = data.sessions;
+        if (data && data.deposits)  deposits = data.deposits;
+        if (data && data.planners && data.planners.length) planners = data.planners;
+        reconcileParentIds();
+        localStorage.setItem('sj_records',  JSON.stringify(records));
+        localStorage.setItem('sj_sessions', JSON.stringify(sessions));
+        localStorage.setItem('sj_deposits', JSON.stringify(deposits));
+        setSyncStatus('ok');
+        renderPlannerDropdowns();
+        renderPlannerListUI();
+        rDrop();
+        updMetrics();
+      })
+      .catch(function() { setSyncStatus('err','Using local data'); });
+  }, 300);
+}
+function init() { bootApp(); }
+
+// ── Helpers ───────────────────────────────────────────────────
+function fmt(s) {
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sc).padStart(2,'0');
+}
+function fHM(s) {
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60);
+  return h+'h '+String(m).padStart(2,'0')+'m';
+}
+function f$(n)  { return '$'+Math.max(0,n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function f$I(n) { return '$'+Math.max(0,n).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+function tod()  { return new Date().toLocaleDateString('en-US'); }
+function fmtDate(d) {
+  if (!d) return '';
+  // Handle ISO strings like 2026-04-23T07:00:00.000Z
+  // and already-formatted dates like 4/23/2026 or 04/23/2026
+  var dt = new Date(d);
+  if (isNaN(dt.getTime())) return String(d);
+  return (dt.getMonth()+1)+'/'+dt.getDate()+'/'+dt.getFullYear();
+}
+function mBadge(r) {
+  var cls = r.rectype==='project' ? 'b-proj' : 'b-plan';
+  var lbl = r.rectype==='project' ? 'Project' : 'Plan';
+  return '<span class="badge '+cls+'">'+lbl+'</span>';
+}
+
+// ── Dropdowns ─────────────────────────────────────────────────
+function renderPlannerDropdowns() {
+  var opts = '';
+  for (var i=0; i<planners.length; i++) opts += '<option>'+planners[i]+'</option>';
+  var ids = ['t-planner','m-planner','ws-planner'];
+  for (var j=0; j<ids.length; j++) {
+    var el = document.getElementById(ids[j]);
+    if (!el) continue;
+    var v = el.value; el.innerHTML = opts; el.value = v;
+  }
+  var rp = document.getElementById('r-planner');
+  if (rp) {
+    var ropts = '<option value="">All planners</option>';
+    for (var k=0; k<planners.length; k++) ropts += '<option>'+planners[k]+'</option>';
+    rp.innerHTML = ropts;
+  }
+}
+function rDrop() {
+  // Top dropdown shows Projects only
+  var projOpts = '<option value="">-- select project --</option>';
+  for (var i=0; i<records.length; i++) {
+    if (records[i].rectype === 'project') {
+      projOpts += '<option value="'+i+'">'+records[i].case+' -- '+records[i].name+'</option>';
+    }
+  }
+  var pdrops = ['t-proj','m-proj'];
+  for (var j=0; j<pdrops.length; j++) {
+    var s = document.getElementById(pdrops[j]);
+    if (!s) continue;
+    var v = s.value; s.innerHTML = projOpts; s.value = v;
+  }
+  // Parent selector in add plan form
+  var par = document.getElementById('np-par');
+  if (par) {
+    var popts = '<option value="">-- create new project below --</option>';
+    for (var k=0; k<records.length; k++) {
+      if (records[k].rectype === 'project') {
+        popts += '<option value="'+k+'">'+records[k].case+' -- '+records[k].name+'</option>';
+      }
+    }
+    par.innerHTML = popts;
+  }
+}
+
+// Returns all Plans that belong to a given Project id
+function getProjPlans(projId) {
+  var proj = null;
+  for (var p=0; p<records.length; p++) {
+    if (records[p].id === projId) { proj = records[p]; break; }
+  }
+  var plans = [];
+  for (var i=0; i<records.length; i++) {
+    var r = records[i];
+    if (r.rectype !== 'plan') continue;
+    // Match by parentId first, then fall back to parentCase if IDs got out of sync
+    var matchById   = String(r.parentId) === String(projId);
+    var matchByCase = proj && r.parentCase && r.parentCase === proj.case;
+    if (matchById || matchByCase) {
+      // Repair parentId if it was mismatched
+      if (!matchById && matchByCase) {
+        r.parentId = projId;
+        localStorage.setItem('sj_records', JSON.stringify(records));
+      }
+      plans.push({idx:i, rec:r});
+    }
+  }
+  return plans;
+}
+
+// Consolidated balance for a project = sum of all child plan deposits minus spent
+function getProjBalance(projId, liveSecs) {
+  var plans = getProjPlans(projId);
+  var totalDeposit = 0, totalSpent = 0;
+  for (var i=0; i<plans.length; i++) {
+    totalDeposit += Number(plans[i].rec.deposit) || 0;
+    totalSpent   += Number(plans[i].rec.spent)   || 0;
+  }
+  var liveCharge = liveSecs ? (liveSecs/3600)*RATE : 0;
+  return { deposit:totalDeposit, spent:totalSpent, remaining:totalDeposit-totalSpent-liveCharge };
+}
+
+// ── Timer ─────────────────────────────────────────────────────
+var aProjIdx = -1; // selected project index
+var aPlanIdx = -1; // selected plan index
+
+function onTProj() {
+  var idx = parseInt(document.getElementById('t-proj').value);
+  aProjIdx = (isNaN(idx)||idx<0) ? -1 : idx;
+  aPlanIdx = -1;
+  var planWrap = document.getElementById('t-plan-wrap');
+  var dep = document.getElementById('t-dep');
+  var planSel = document.getElementById('t-plan');
+  if (aProjIdx < 0) {
+    if (planWrap) planWrap.style.display='none';
+    if (dep) dep.style.display='none';
+    return;
+  }
+  // Populate plan dropdown with child plans of selected project
+  var proj = records[aProjIdx];
+  var plans = getProjPlans(proj.id);
+  var planOpts = '<option value="">-- select plan --</option>';
+  for (var i=0; i<plans.length; i++) {
+    planOpts += '<option value="'+plans[i].idx+'">'+plans[i].rec.case+' -- '+plans[i].rec.name+'</option>';
+  }
+  if (planSel) planSel.innerHTML = planOpts;
+  if (planWrap) planWrap.style.display = plans.length ? 'block' : 'none';
+  if (dep) dep.style.display='block';
+  updDep(0);
+}
+
+function onTPlan() {
+  var idx = parseInt(document.getElementById('t-plan').value);
+  aPlanIdx = (isNaN(idx)||idx<0) ? -1 : idx;
+  var planSec = document.getElementById('d-plan-section');
+  if (aPlanIdx < 0) { if(planSec) planSec.style.display='none'; return; }
+  if (planSec) planSec.style.display='block';
+  updDep(0);
+}
+
+function updDep(ls) {
+  if (aProjIdx < 0) return;
+  var proj = records[aProjIdx];
+  var bal = getProjBalance(proj.id, ls);
+  // Project consolidated bar
+  var projPct = bal.deposit > 0 ? Math.max(0,Math.min(100,(bal.remaining/bal.deposit)*100)) : 0;
+  document.getElementById('d-proj-rem').textContent = f$(bal.remaining);
+  document.getElementById('d-proj-lbl').textContent = 'of '+f$I(bal.deposit)+' total deposit';
+  document.getElementById('d-proj-name').textContent = proj.case;
+  var pb = document.getElementById('d-proj-bar');
+  pb.style.width = projPct.toFixed(1)+'%';
+  pb.style.background = projPct>40?'#1D9E75':projPct>20?'#BA7517':'#E24B4A';
+  document.getElementById('d-proj-pct').textContent = projPct.toFixed(0)+'% remaining';
+  document.getElementById('d-proj-rem').style.color = projPct>40?'#1a1a1a':projPct>20?'#92400e':'#991b1b';
+  // Plan individual bar
+  if (aPlanIdx >= 0) {
+    var plan = records[aPlanIdx];
+    var liveCharge = (ls/3600)*RATE;
+    var planRem = Number(plan.deposit)-Number(plan.spent)-liveCharge;
+    var planPct = Number(plan.deposit)>0 ? Math.max(0,Math.min(100,(planRem/Number(plan.deposit))*100)) : 0;
+    document.getElementById('d-plan-rem').textContent = f$(planRem);
+    document.getElementById('d-plan-lbl').textContent = 'of '+f$I(plan.deposit)+' plan deposit';
+    document.getElementById('d-plan-name').textContent = plan.case;
+    var plb = document.getElementById('d-plan-bar');
+    plb.style.width = planPct.toFixed(1)+'%';
+    plb.style.background = planPct>40?'#378ADD':planPct>20?'#BA7517':'#E24B4A';
+    document.getElementById('d-plan-pct').textContent = planPct.toFixed(0)+'% remaining';
+  }
+}
+
+function startTimer() {
+  if (aProjIdx < 0) { alert('Select a project first.'); return; }
+  if (aPlanIdx < 0) { alert('Select a plan to log time against.'); return; }
+  if (!running&&!paused) { elapsed=0; startT=Date.now(); }
+  else if (paused) { startT=Date.now()-elapsed*1000; }
+  running=true; paused=false;
+  tInt = setInterval(function() {
+    elapsed = Math.floor((Date.now()-startT)/1000);
+    document.getElementById('tdisp').textContent = fmt(elapsed);
+    updDep(elapsed);
+  }, 1000);
+  setUI('running');
+}
+function pauseTimer() { clearInterval(tInt); paused=true; running=false; setUI('paused'); }
+function stopTimer() {
+  clearInterval(tInt);
+  if (elapsed>0 && aPlanIdx>=0) {
+    var proj = records[aProjIdx];
+    var plan = records[aPlanIdx];
+    var charge = parseFloat(((elapsed/3600)*RATE).toFixed(2));
+    var sdata = {
+      recIdx: String(aPlanIdx),
+      projCase: proj.case, projName: proj.name,
+      case: plan.case, name: plan.name, rectype: 'plan',
+      activity: document.getElementById('t-act').value||'Review',
+      note: document.getElementById('t-note').value.trim(),
+      planner: document.getElementById('t-planner').value,
+      seconds: elapsed, charge: charge, date: tod(), source: 'timer'
+    };
+    plan.spent = parseFloat((Number(plan.spent)+charge).toFixed(2));
+    sessions.push(sdata);
+    localStorage.setItem('sj_sessions', JSON.stringify(sessions));
+    localStorage.setItem('sj_records',  JSON.stringify(records));
+    api({method:'POST', body:{action:'saveSession', data:sdata}})
+      .then(function(res){ sdata.id=res.id; })
+      .catch(function(){ });
+  }
+  elapsed=0; running=false; paused=false;
+  document.getElementById('tdisp').textContent = '00:00:00';
+  document.getElementById('t-note').value = '';
+  // Reset plan dropdown
+  var planSel = document.getElementById('t-plan');
+  if (planSel) planSel.value = '';
+  aPlanIdx = -1;
+  var planSec = document.getElementById('d-plan-section');
+  if (planSec) planSec.style.display='none';
+  setUI('idle'); updMetrics(); rDrop(); updDep(0);
+}
+function setUI(st) {
+  document.getElementById('sdot').className = 'dot dot-'+st;
+  document.getElementById('stxt').textContent = st==='running'?'Recording...':st==='paused'?'Paused':'Idle -- select a project to begin';
+  document.getElementById('btn-s').disabled = (st==='running');
+  document.getElementById('btn-s').textContent = st==='paused'?'Resume':'Start';
+  document.getElementById('btn-p').disabled = (st!=='running');
+  document.getElementById('btn-x').disabled = (st==='idle');
+}
+function updMetrics() {
+  var t = tod(), now = new Date(), sw = new Date(now);
+  sw.setDate(now.getDate()-now.getDay());
+  var tdS=0, wkS=0;
+  for (var i=0; i<sessions.length; i++) {
+    if (sessions[i].date===t) tdS += Number(sessions[i].seconds);
+    if (new Date(sessions[i].date)>=sw) wkS += Number(sessions[i].seconds);
+  }
+  document.getElementById('m-td').textContent = fHM(tdS);
+  document.getElementById('m-wk').textContent = fHM(wkS);
+  document.getElementById('m-all').textContent = sessions.length;
+}
+
+// ── Manual entry ──────────────────────────────────────────────
+function onMProj() {
+  var idx = parseInt(document.getElementById('m-proj').value);
+  var planWrap = document.getElementById('m-plan-wrap');
+  var planSel = document.getElementById('m-plan');
+  if (isNaN(idx)||idx<0) { if(planWrap) planWrap.style.display='none'; updPrev(); return; }
+  var proj = records[idx];
+  var plans = getProjPlans(proj.id);
+  var planOpts = '<option value="">-- select plan --</option>';
+  for (var i=0; i<plans.length; i++) {
+    planOpts += '<option value="'+plans[i].idx+'">'+plans[i].rec.case+' -- '+plans[i].rec.name+'</option>';
+  }
+  if (planSel) planSel.innerHTML = planOpts;
+  if (planWrap) planWrap.style.display = plans.length ? 'block' : 'none';
+  updPrev();
+}
+function updPrev() {
+  var projIdx = parseInt(document.getElementById('m-proj').value);
+  var planIdx = parseInt(document.getElementById('m-plan') ? document.getElementById('m-plan').value : '');
+  var h = parseFloat(document.getElementById('m-h').value)||0;
+  var m = parseInt(document.getElementById('m-m').value)||0;
+  var s = h*3600+m*60;
+  var prev = document.getElementById('m-prev');
+  if (isNaN(projIdx)||projIdx<0||s===0) { prev.style.display='none'; return; }
+  var dispCase = (!isNaN(planIdx)&&planIdx>=0) ? records[planIdx].case : records[projIdx].case;
+  prev.style.display='block';
+  prev.innerHTML = 'Preview: '+fHM(s)+' on '+dispCase+' &nbsp;&middot;&nbsp; <strong>'+f$((s/3600)*RATE)+'</strong>';
+}
+function saveMan() {
+  var projIdx = parseInt(document.getElementById('m-proj').value);
+  if (isNaN(projIdx)||projIdx<0) { alert('Select a project.'); return; }
+  var planEl = document.getElementById('m-plan');
+  var planIdx = planEl ? parseInt(planEl.value) : -1;
+  if (isNaN(planIdx)||planIdx<0) { alert('Select a plan.'); return; }
+  var dv = document.getElementById('m-date').value;
+  if (!dv) { alert('Enter a date.'); return; }
+  var h = parseFloat(document.getElementById('m-h').value)||0;
+  var m = parseInt(document.getElementById('m-m').value)||0;
+  var secs = h*3600+m*60;
+  if (secs<=0) { alert('Enter time greater than zero.'); return; }
+  var proj = records[projIdx];
+  var plan = records[planIdx];
+  var charge = parseFloat(((secs/3600)*RATE).toFixed(2));
+  var ds = new Date(dv+'T12:00:00').toLocaleDateString('en-US');
+  var sdata = {
+    recIdx: String(planIdx),
+    projCase: proj.case, projName: proj.name,
+    case: plan.case, name: plan.name, rectype: 'plan',
+    activity: document.getElementById('m-act').value||'Review',
+    note: document.getElementById('m-note').value.trim(),
+    planner: document.getElementById('m-planner').value,
+    seconds: secs, charge: charge, date: ds, source: 'manual'
+  };
+  plan.spent = parseFloat((Number(plan.spent)+charge).toFixed(2));
+  sessions.push(sdata);
+  localStorage.setItem('sj_sessions', JSON.stringify(sessions));
+  localStorage.setItem('sj_records',  JSON.stringify(records));
+  api({method:'POST', body:{action:'saveSession', data:sdata}})
+    .then(function(res){ sdata.id=res.id; })
+    .catch(function(){ });
+  var t = document.getElementById('man-toast');
+  t.textContent = 'Saved: '+fHM(secs)+' on '+plan.case+' ('+f$(charge)+')';
+  t.style.display='block';
+  setTimeout(function(){ t.style.display='none'; }, 4000);
+  clearMan(); renderManR(); updMetrics();
+}
+function clearMan() {
+  var f1 = ['m-proj','m-act','m-plan'];
+  for (var i=0; i<f1.length; i++) { var el=document.getElementById(f1[i]); if(el) el.value=''; }
+  var f2 = ['m-date','m-h','m-m','m-note'];
+  for (var j=0; j<f2.length; j++) { var el2=document.getElementById(f2[j]); if(el2) el2.value=''; }
+  var mpl=document.getElementById('m-plan-wrap'); if(mpl) mpl.style.display='none';
+  var mp=document.getElementById('m-meta'); if(mp) mp.style.display='none';
+  var mpv=document.getElementById('m-prev'); if(mpv) mpv.style.display='none';
+}
+function renderManR() {
+  var el = document.getElementById('man-recent');
+  var list = [];
+  for (var i=sessions.length-1; i>=0 && list.length<10; i--) {
+    if (sessions[i].source==='manual') list.push(sessions[i]);
+  }
+  if (!list.length) { el.innerHTML='<div class="empty">No manual entries yet.</div>'; return; }
+  var html = '';
+  for (var j=0; j<list.length; j++) {
+    var s = list[j];
+    html += '<div class="srow">'
+      +'<span style="min-width:90px;font-weight:600;">'+s.case+'</span>'
+      +'<span class="badge '+(s.rectype==='project'?'b-proj':'b-plan')+'">'+(s.rectype==='project'?'Proj':'Plan')+'</span>'
+      +'<span style="min-width:52px;color:#666;">'+fHM(Number(s.seconds))+'</span>'
+      +'<span style="flex:1;color:#666;font-size:11px;">'+s.activity+(s.note?' -- '+s.note:'')+'</span>'
+      +'<span style="min-width:48px;text-align:right;">'+f$(s.charge)+'</span>'
+      +'<span style="min-width:68px;text-align:right;color:#666;font-size:11px;">'+fmtDate(s.date)+'</span>'
+      +'</div>';
+  }
+  el.innerHTML = html;
+}
+function renderLog() {
+  var f = document.getElementById('log-filter').value;
+  var el = document.getElementById('log-list');
+  var list = [];
+  for (var i=sessions.length-1; i>=0 && list.length<60; i--) {
+    if (!f || sessions[i].source===f) list.push(sessions[i]);
+  }
+  if (!list.length) { el.innerHTML='<div class="empty">No sessions yet.</div>'; return; }
+  var html = '';
+  for (var j=0; j<list.length; j++) {
+    var s = list[j];
+    var srcBadge = s.source==='manual'
+      ? '<span class="badge b-manual">manual</span>'
+      : '<span class="badge b-timer">timer</span>';
+    html += '<div class="srow">'
+      +'<span style="min-width:90px;font-weight:600;font-size:12px;">'+s.case+'</span>'
+      +'<span class="badge '+(s.rectype==='project'?'b-proj':'b-plan')+'">'+(s.rectype==='project'?'Proj':'Plan')+'</span>'
+      +srcBadge
+      +'<span style="min-width:52px;color:#666;">'+fHM(Number(s.seconds))+'</span>'
+      +'<span style="flex:1;color:#666;font-size:11px;">'+s.activity+(s.note?' -- '+s.note:'')+'</span>'
+      +'<span style="min-width:46px;text-align:right;">'+f$(s.charge)+'</span>'
+      +'<span style="min-width:68px;text-align:right;color:#666;font-size:11px;">'+fmtDate(s.date)+'</span>'
+      +'</div>';
+  }
+  el.innerHTML = html;
+}
+
+// ── Report ────────────────────────────────────────────────────
+function setWeek() {
+  var now=new Date(), d=now.getDay();
+  var mon=new Date(now); mon.setDate(now.getDate()-d);
+  var sun=new Date(mon); sun.setDate(mon.getDate()+6);
+  document.getElementById('r-from').value=mon.toLocaleDateString('en-US');
+  document.getElementById('r-to').value=sun.toLocaleDateString('en-US');
+}
+function setMonth() {
+  var now=new Date();
+  document.getElementById('r-from').value=new Date(now.getFullYear(),now.getMonth(),1).toLocaleDateString('en-US');
+  document.getElementById('r-to').value=new Date(now.getFullYear(),now.getMonth()+1,0).toLocaleDateString('en-US');
+}
+function genReport() {
+  var from=new Date(document.getElementById('r-from').value);
+  var to=new Date(document.getElementById('r-to').value); to.setHours(23,59,59);
+  if (isNaN(from)||isNaN(to)) { alert('Enter valid dates.'); return; }
+  var pf = document.getElementById('r-planner').value;
+  var filt=[], allF=[];
+  for (var i=0; i<sessions.length; i++) {
+    var d=new Date(sessions[i].date);
+    if (d>=from&&d<=to) {
+      allF.push(sessions[i]);
+      if (!pf||sessions[i].planner===pf) filt.push(sessions[i]);
+    }
+  }
+  if (!filt.length) { document.getElementById('rpt-out').innerHTML='<div class="empty">No sessions in this range.</div>'; return; }
+  var totS=0,totC=0,manC=0;
+  for (var j=0; j<filt.length; j++) { totS+=Number(filt[j].seconds); totC+=Number(filt[j].charge); if(filt[j].source==='manual')manC++; }
+  var byC={};
+  for (var k=0; k<filt.length; k++) {
+    var s=filt[k];
+    if (!byC[s.case]) byC[s.case]={case:s.case,name:s.name,rectype:s.rectype,secs:0,charge:0};
+    byC[s.case].secs+=Number(s.seconds); byC[s.case].charge+=Number(s.charge);
+  }
+  var cl=[], ck=Object.keys(byC);
+  for (var m=0; m<ck.length; m++) cl.push(byC[ck[m]]);
+  cl.sort(function(a,b){return b.secs-a.secs;});
+  var mx=cl.length?cl[0].secs:1;
+  var datesSet={}, dateArr=[];
+  for (var n=0; n<filt.length; n++) {
+    if (!datesSet[filt[n].date]) { datesSet[filt[n].date]=true; dateArr.push(filt[n].date); }
+  }
+  dateArr.sort(function(a,b){return new Date(a)-new Date(b);});
+  var pcHTML='';
+  if (!pf) {
+    var bp={};
+    for (var p=0; p<allF.length; p++) {
+      var pl=allF[p].planner||'Unknown';
+      if (!bp[pl]) bp[pl]={secs:0,charge:0,n:0};
+      bp[pl].secs+=Number(allF[p].seconds); bp[pl].charge+=Number(allF[p].charge); bp[pl].n++;
+    }
+    var plArr=[], plKeys=Object.keys(bp);
+    for (var q=0; q<plKeys.length; q++) plArr.push([plKeys[q],bp[plKeys[q]]]);
+    plArr.sort(function(a,b){return b[1].secs-a[1].secs;});
+    var mps=plArr.length?plArr[0][1].secs:1;
+    if (plArr.length) {
+      pcHTML='<div style="font-size:13px;font-weight:600;margin-bottom:8px;">Planner comparison</div><div class="pc-grid">';
+      for (var r2=0; r2<plArr.length; r2++) {
+        var pn=plArr[r2][0], pd=plArr[r2][1];
+        var pbar=Math.round((pd.secs/mps)*100);
+        pcHTML+='<div class="pc-card"><div class="pc-name">'+pn+'</div>'
+          +'<div style="font-size:14px;font-weight:600;">'+fHM(pd.secs)+'</div>'
+          +'<div style="font-size:11px;color:#666;">'+f$I(pd.charge)+' &middot; '+pd.n+' sessions</div>'
+          +'<div style="background:#e0e0e0;border-radius:3px;height:5px;margin-top:7px;overflow:hidden;">'
+          +'<div style="height:100%;border-radius:3px;background:#185FA5;width:'+pbar+'%;"></div></div></div>';
+      }
+      pcHTML+='</div><div class="divider"></div>';
+    }
+  }
+  var barsHTML='';
+  for (var b2=0; b2<cl.length; b2++) {
+    var cp=cl[b2], bw=Math.round((cp.secs/mx)*100);
+    barsHTML+='<div class="pbar-row">'
+      +'<span class="pbar-lbl"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+PAL[b2%PAL.length]+';margin-right:5px;vertical-align:middle;"></span>'+cp.case+'</span>'
+      +'<span class="badge '+(cp.rectype==='project'?'b-proj':'b-plan')+'" style="flex-shrink:0;margin-right:4px;">'+(cp.rectype==='project'?'Proj':'Plan')+'</span>'
+      +'<div class="pbar-bg"><div class="pbar-fill" style="width:'+bw+'%;background:'+PAL[b2%PAL.length]+';"></div></div>'
+      +'<span class="pbar-val">'+fHM(cp.secs)+'</span></div>';
+  }
+  var tblRows='';
+  var sortedFilt=filt.slice().sort(function(a,b){return new Date(b.date)-new Date(a.date);});
+  for (var t2=0; t2<sortedFilt.length; t2++) {
+    var sf=sortedFilt[t2];
+    var srcB=sf.source==='manual'?'<span class="badge b-manual">Manual</span>':'<span class="badge b-timer">Timer</span>';
+    tblRows+='<tr><td>'+sf.date+'</td><td style="font-weight:600;">'+sf.case+'</td>'
+      +'<td><span class="badge '+(sf.rectype==='project'?'b-proj':'b-plan')+'">'+(sf.rectype==='project'?'Project':'Plan')+'</span></td>'
+      +'<td style="font-size:11px;">'+sf.activity+(sf.note?' <span style="color:#999;">-- '+sf.note+'</span>':'')+'</td>'
+      +'<td>'+(sf.planner||'--')+'</td><td>'+srcB+'</td>'
+      +'<td style="text-align:right;">'+fHM(Number(sf.seconds))+'</td>'
+      +'<td style="text-align:right;">'+f$(sf.charge)+'</td></tr>';
+  }
+  var lgdHTML='', dsArr=[];
+  for (var lg=0; lg<ck.length; lg++) {
+    lgdHTML+='<span class="lgd-i"><span class="lgd-sw" style="background:'+PAL[lg%PAL.length]+';"></span>'+ck[lg]+'</span>';
+    var dArr=[];
+    for (var dd=0; dd<dateArr.length; dd++) {
+      var sum=0;
+      for (var ss=0; ss<filt.length; ss++) {
+        if (filt[ss].date===dateArr[dd]&&filt[ss].case===ck[lg]) sum+=Number(filt[ss].seconds);
+      }
+      dArr.push(parseFloat((sum/3600).toFixed(2)));
+    }
+    dsArr.push({label:ck[lg],fullName:byC[ck[lg]].name,backgroundColor:PAL[lg%PAL.length],data:dArr,borderRadius:2,borderSkipped:false});
+  }
+  var chartHTML='';
+  if (dateArr.length) {
+    chartHTML='<div class="divider"></div>'
+      +'<div style="font-size:13px;font-weight:600;margin-bottom:6px;">Daily hours by project/plan</div>'
+      +'<div class="lgd" id="rpt-lgd">'+lgdHTML+'</div>'
+      +'<div style="position:relative;width:100%;height:220px;">'
+      +'<canvas id="rptC" role="img" aria-label="Daily hours chart"></canvas></div>';
+  }
+  document.getElementById('rpt-out').innerHTML=
+    '<div class="metric-grid" style="margin-bottom:12px;">'
+    +'<div class="metric-card"><div class="metric-val">'+fHM(totS)+'</div><div class="metric-lbl">Total hours'+(pf?' -- '+pf:'')+'</div></div>'
+    +'<div class="metric-card"><div class="metric-val">'+f$I(totC)+'</div><div class="metric-lbl">Fees @ $160/hr</div></div>'
+    +'<div class="metric-card"><div class="metric-val">'+filt.length+'</div><div class="metric-lbl">Sessions ('+manC+' manual)</div></div>'
+    +'<div class="metric-card"><div class="metric-val">'+cl.length+'</div><div class="metric-lbl">Projects/Plans</div></div>'
+    +'</div>'
+    +pcHTML
+    +'<div style="font-size:13px;font-weight:600;margin-bottom:8px;">Hours by project/plan</div>'
+    +barsHTML
+    +chartHTML
+    +'<div class="divider"></div>'
+    +'<div style="font-size:13px;font-weight:600;margin-bottom:8px;">Session detail</div>'
+    +'<div style="overflow-x:auto;"><table class="data-table"><thead><tr>'
+    +'<th>Date</th><th>Case</th><th>Type</th><th>Activity</th><th>Planner</th><th>Entry</th>'
+    +'<th style="text-align:right;">Time</th><th style="text-align:right;">Charge</th>'
+    +'</tr></thead><tbody>'+tblRows+'</tbody></table></div>';
+  if (dateArr.length && rptChart) { rptChart.destroy(); rptChart=null; }
+  if (dateArr.length) {
+    rptChart = new Chart(document.getElementById('rptC'), {
+      type:'bar', data:{labels:dateArr,datasets:dsArr},
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        interaction:{mode:'point',intersect:true},
+        plugins:{legend:{display:false},tooltip:{
+          callbacks:{
+            title:function(c){return 'Date: '+c[0].label;},
+            label:function(c){var h=c.parsed.y;if(!h)return null;return ' '+c.dataset.label+' -- '+c.dataset.fullName+'  |  '+h.toFixed(2)+'h  $'+(h*RATE).toFixed(0);},
+            afterBody:function(c){var di=c[0].dataIndex,tot=0;for(var i=0;i<dsArr.length;i++)tot+=dsArr[i].data[di]||0;return tot>0?['------------------','Day total: '+tot.toFixed(2)+'h  $'+(tot*RATE).toFixed(0)]:[]; }
+          },
+          backgroundColor:'rgba(20,20,20,.93)',titleColor:'#fff',bodyColor:'#ccc',padding:10,cornerRadius:6
+        }},
+        scales:{
+          x:{stacked:true,ticks:{font:{size:10},autoSkip:false,maxRotation:45},grid:{display:false}},
+          y:{stacked:true,beginAtZero:true,ticks:{font:{size:10}},grid:{color:'rgba(0,0,0,.06)'}}
+        }
+      }
+    });
+  }
+}
+function exportCSV() {
+  var from=new Date(document.getElementById('r-from').value);
+  var to=new Date(document.getElementById('r-to').value); to.setHours(23,59,59);
+  var pf=document.getElementById('r-planner').value;
+  var list=[];
+  for (var i=0; i<sessions.length; i++) {
+    var d=new Date(sessions[i].date);
+    if (d>=from&&d<=to&&(!pf||sessions[i].planner===pf)) list.push(sessions[i]);
+  }
+  var csv='Date,Case,Name,Record Type,Activity,Planner,Entry Type,Hours,Charge,Note\n';
+  for (var j=0; j<list.length; j++) {
+    var s=list[j];
+    csv+='"'+s.date+'","'+s.case+'","'+s.name+'",'
+      +'"'+(s.rectype==='project'?'Project':'Plan')+'","'+s.activity+'","'+(s.planner||'')+'","'+(s.source==='manual'?'Manual':'Timer')+'",'
+      +Number(s.seconds/3600).toFixed(2)+',"'+Number(s.charge).toFixed(2)+'","'+(s.note||'')+'"'+'\n';
+  }
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='sj_report.csv'; a.click();
+}
+
+// ── Accounting Worksheet ──────────────────────────────────────
+function getWDays(y,mo) {
+  var days=[], dim=new Date(y,mo+1,0).getDate();
+  for (var d=1;d<=dim;d++) { if(new Date(y,mo,d).getDay()!==0&&new Date(y,mo,d).getDay()!==6) days.push(d); }
+  return days;
+}
+function genWS() {
+  var planner=document.getElementById('ws-planner').value;
+  var month=parseInt(document.getElementById('ws-month').value);
+  var year=parseInt(document.getElementById('ws-year').value);
+  var empN=document.getElementById('ws-emp').value||'--';
+  var wdays=getWDays(year,month);
+  var mses=[];
+  for (var i=0; i<sessions.length; i++) {
+    var d=new Date(sessions[i].date);
+    if (sessions[i].planner===planner&&d.getFullYear()===year&&d.getMonth()===month) mses.push(sessions[i]);
+  }
+  if (!mses.length) { document.getElementById('ws-out').innerHTML='<div class="empty">No sessions found for '+planner+' in '+MONTHS[month]+' '+year+'.</div>'; return; }
+  var byC={};
+  for (var j=0; j<mses.length; j++) {
+    var s=mses[j];
+    if (!byC[s.case]) {
+      var rec={};
+      for (var r=0;r<records.length;r++){if(records[r].case===s.case){rec=records[r];break;}}
+      byC[s.case]={case:s.case,name:s.name,rectype:s.rectype||'project',type:rec.type||'--',deposit:Number(rec.deposit)||0,spent:Number(rec.spent)||0,totS:0,days:{}};
+    }
+    byC[s.case].totS+=Number(s.seconds);
+    var dn=new Date(s.date).getDate();
+    byC[s.case].days[dn]=(byC[s.case].days[dn]||0)+Number(s.seconds);
+  }
+  var rows=[], rcks=Object.keys(byC);
+  for (var k=0;k<rcks.length;k++) rows.push(byC[rcks[k]]);
+  rows.sort(function(a,b){return a.case<b.case?-1:1;});
+  var totS=0; for(var t=0;t<rows.length;t++) totS+=rows[t].totS;
+  var totF=parseFloat(((totS/3600)*RATE).toFixed(2));
+  var dayTots={};
+  for (var dw=0;dw<wdays.length;dw++) {
+    var dt=wdays[dw], sum=0;
+    for (var rw=0;rw<rows.length;rw++) sum+=(rows[rw].days[dt]||0);
+    dayTots[dt]=sum;
+  }
+  var dW=Math.max(20,Math.floor((560-(88+50+108+65+38+50+65))/Math.max(wdays.length,1)));
+  var dH1='',dH2='';
+  for (var dh=0;dh<wdays.length;dh++) {
+    dH1+='<th style="width:'+dW+'px;">'+wdays[dh]+'</th>';
+    dH2+='<th style="width:'+dW+'px;">'+DOWS[new Date(year,month,wdays[dh]).getDay()]+'</th>';
+  }
+  var tRows='';
+  for (var tr=0;tr<rows.length;tr++) {
+    var rw2=rows[tr], hrs=(rw2.totS/3600), fee=hrs*RATE, rem=rw2.deposit-rw2.spent;
+    var dCells='';
+    for (var dc=0;dc<wdays.length;dc++) {
+      var secs=rw2.days[wdays[dc]]||0;
+      if (secs>0) { var hv=secs/3600; dCells+='<td class="dh">'+(hv===Math.floor(hv)?hv.toFixed(0):hv.toFixed(2))+'</td>'; }
+      else dCells+='<td class="de"></td>';
+    }
+    tRows+='<tr><td style="font-size:8px;">'+rw2.case+'</td><td style="font-size:7.5px;">'+rw2.type+'</td>'
+      +'<td style="font-size:8px;">'+rw2.name+'</td>'
+      +'<td class="nc" style="font-size:7.5px;">'+(rw2.rectype==='plan'?'Plan Review':'Review')+'</td>'
+      +'<td class="nr">'+hrs.toFixed(2)+'</td><td class="nr">'+f$(fee)+'</td><td class="nr">'+f$(rem)+'</td>'+dCells+'</tr>';
+  }
+  var totDC='';
+  for (var tc=0;tc<wdays.length;tc++) {
+    var tsecs=dayTots[wdays[tc]]||0;
+    if (tsecs>0) { var th=tsecs/3600; totDC+='<td class="nc">'+(th===Math.floor(th)?th.toFixed(0):th.toFixed(2))+'</td>'; }
+    else totDC+='<td class="de"></td>';
+  }
+  var sigLine='<span class="sig-l">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>';
+  document.getElementById('ws-out').innerHTML=
+    '<div style="overflow-x:auto;"><div class="ws" id="ws-print">'
+    +'<div class="ws-title">Planner Accounting Worksheet</div>'
+    +'<div class="ws-hdr"><div class="ws-emp"><div>Employee Name: &nbsp;<strong>'+planner+'</strong></div><div style="margin-top:3px;">Employee #: &nbsp;<strong>'+empN+'</strong></div></div>'
+    +'<div class="ws-mon">'+MONTHS[month]+'-'+String(year).slice(2)+'</div></div>'
+    +'<div class="ws-red"></div>'
+    +'<div style="overflow-x:auto;"><table class="ws-tbl">'
+    +'<colgroup><col style="width:88px;"/><col style="width:50px;"/><col style="width:108px;"/><col style="width:65px;"/><col style="width:38px;"/><col style="width:50px;"/><col style="width:65px;"/></colgroup>'
+    +'<thead><tr>'
+    +'<th rowspan="3" class="lh">Project Code</th><th rowspan="3">Project Type</th>'
+    +'<th rowspan="3" class="lh">Project / Plan Name</th>'
+    +'<th rowspan="3" style="font-size:7.5px;">Task<br/><span style="font-weight:400;">(DRC,Review,PC,etc)</span></th>'
+    +'<th>Hourly<br/>Totals</th><th>Daily Fee<br/>Totals</th><th>Estimated<br/>Rem. Balance</th>'+dH1+'</tr>'
+    +'<tr><th>Hours</th><th>Amount</th><th>Amount</th>'+dH2+'</tr></thead>'
+    +'<tbody>'+tRows
+    +'<tr class="tr-tot"><td colspan="4" style="text-align:right;font-size:8px;">MONTHLY TOTAL</td>'
+    +'<td class="nr">'+(totS/3600).toFixed(2)+'</td><td class="nr fee-tot">'+f$(totF)+'</td><td></td>'+totDC+'</tr>'
+    +'</tbody></table></div>'
+    +'<div class="ws-foot">'
+    +'<div class="sig-b" style="font-size:9px;color:#111;">'
+    +'<div style="margin-bottom:9px;">Name, Title &nbsp;'+sigLine+'<span class="sig-s">Signature</span></div>'
+    +'<div>Sup. Name, Sup. Title &nbsp;'+sigLine+'<span class="sig-s">Signature</span></div></div>'
+    +'<div style="font-size:9px;color:#111;text-align:right;">'
+    +'<div style="margin-bottom:14px;">Date: &nbsp;<span style="border-bottom:1px solid #111;min-width:90px;display:inline-block;">&nbsp;</span></div>'
+    +'<div>Date: &nbsp;<span style="border-bottom:1px solid #111;min-width:90px;display:inline-block;">&nbsp;</span></div>'
+    +'</div></div></div></div>';
+}
+function printWS() {
+  var el=document.getElementById('ws-print');
+  if (!el) { alert('Generate the worksheet first.'); return; }
+  var win=window.open('','_blank');
+  win.document.write('<!DOCTYPE html><html><head><title>Planner Accounting Worksheet</title><style>'
+    +'*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:9.5px;background:#fff;color:#111;}'
+    +'.ws-title{text-align:center;font-size:15px;font-weight:700;padding:8px 0 3px;}'
+    +'.ws-hdr{display:flex;justify-content:space-between;padding:5px 10px 0;}'
+    +'.ws-emp{font-size:10px;line-height:1.7;}.ws-mon{font-size:12px;font-weight:700;}'
+    +'.ws-red{height:5px;background:#C00;margin:4px 0;}'
+    +'table{width:100%;border-collapse:collapse;table-layout:fixed;}'
+    +'th{background:#ddd;border:1px solid #bbb;padding:2px 3px;text-align:center;font-size:8.5px;font-weight:700;white-space:nowrap;}'
+    +'th.lh{text-align:left;}td{border:1px solid #ccc;padding:2px 3px;font-size:8.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+    +'td.nr{text-align:right;}td.nc{text-align:center;}'
+    +'tr.tr-tot td{background:#f0f0f0;font-weight:700;border-top:2px solid #888;}'
+    +'td.fee-tot{background:#FFD700;}td.dh{background:#d4edda;text-align:center;font-weight:700;}td.de{text-align:center;color:#ddd;}'
+    +'.ws-foot{padding:8px 10px 6px;border-top:1px solid #ccc;display:flex;justify-content:space-between;}'
+    +'.sig-l{border-bottom:1px solid #111;min-width:130px;display:inline-block;vertical-align:bottom;}'
+    +'.sig-s{font-size:7.5px;text-align:center;display:block;margin-top:1px;color:#555;}'
+    +'@media print{body{margin:0;}@page{margin:.4in;size:landscape;}}'
+    +'</style></head><body>'+el.innerHTML+'</body></html>');
+  win.document.close();
+  setTimeout(function(){ win.print(); }, 400);
+}
+
+// ── Projects & Plans ──────────────────────────────────────────
+function renderRecTbl() {
+  var el = document.getElementById('rec-tbl');
+  // Separate projects and plans
+  var projects = [], plans = [];
+  for (var i=0; i<records.length; i++) {
+    if (records[i].rectype==='project') projects.push({idx:i,rec:records[i]});
+    else plans.push({idx:i,rec:records[i]});
+  }
+  if (!projects.length && !plans.length) {
+    el.innerHTML='<div class="empty">No projects yet. Add a Plan below to get started.</div>'; return;
+  }
+  var html = '';
+  // Render each project as a group header with its plans underneath
+  for (var p=0; p<projects.length; p++) {
+    var proj = projects[p].rec;
+    var bal = getProjBalance(proj.id, 0);
+    var projPct = bal.deposit>0 ? (bal.remaining/bal.deposit)*100 : 0;
+    var projBc = projPct>40?'b-green':projPct>20?'b-amber':'b-red';
+    // Project header row
+    html += '<tr style="background:var(--color-bg,#f8f9fa);">'
+      +'<td colspan="2" style="font-weight:700;font-size:13px;padding:10px 8px 6px 0;">'
+      +'<span class="badge b-proj" style="margin-right:6px;">Project</span>'+proj.case+' &mdash; '+proj.name+'</td>'
+      +'<td style="font-size:11px;color:#666;padding:10px 8px 6px 0;">'+proj.applicant+'</td>'
+      +'<td style="text-align:right;font-weight:600;padding:10px 8px 6px 0;">'+f$I(bal.deposit)+'</td>'
+      +'<td style="text-align:right;padding:10px 8px 6px 0;">'+f$(bal.spent)+'</td>'
+      +'<td style="text-align:right;padding:10px 8px 6px 0;"><span class="badge '+projBc+'">'+f$(bal.remaining)+'</span></td>'
+      +'<td style="padding:10px 8px 6px 0;font-size:11px;color:#666;">All plans combined</td>'
+      +'</tr>';
+    // Child plans
+    var childPlans = getProjPlans(proj.id);
+    if (!childPlans.length) {
+      html += '<tr><td colspan="7" style="font-size:12px;color:#999;padding:4px 0 8px 16px;font-style:italic;">No plans added yet</td></tr>';
+    }
+    for (var cp=0; cp<childPlans.length; cp++) {
+      var plan = childPlans[cp].rec;
+      var pidx = childPlans[cp].idx;
+      var rem = Number(plan.deposit)-Number(plan.spent);
+      var pct = Number(plan.deposit)>0?(rem/Number(plan.deposit))*100:0;
+      var bc = pct>40?'b-green':pct>20?'b-amber':'b-red';
+      html += '<tr>'
+        +'<td style="padding-left:20px;font-size:12px;">'
+        +'<span style="color:#ccc;margin-right:6px;">&#x2514;</span>'
+        +'<span class="badge b-plan" style="margin-right:5px;">Plan</span>'+plan.case+'</td>'
+        +'<td style="font-size:12px;color:#666;">'+plan.type+'</td>'
+        +'<td style="font-size:12px;">'+plan.name+'</td>'
+        +'<td style="text-align:right;">'+f$I(plan.deposit)+'</td>'
+        +'<td style="text-align:right;">'+f$(plan.spent)+'</td>'
+        +'<td style="text-align:right;"><span class="badge '+bc+'">'+f$(rem)+'</span></td>'
+        +'<td style="white-space:nowrap;">'
+        +'<button class="btn btn-sm btn-success" onclick="openDep('+pidx+')" style="margin-right:3px;">+Dep</button>'
+        +'<button class="btn btn-sm" onclick="openHist('+pidx+')" style="margin-right:3px;">History</button>'
+        +'<button class="btn btn-sm btn-danger" onclick="delRec('+pidx+')">Remove</button>'
+        +'</td></tr>';
+    }
+    // Spacer between projects
+    html += '<tr><td colspan="7" style="height:8px;border:none;"></td></tr>';
+  }
+  // Orphan plans (no parent project) — shouldn't normally occur
+  var orphans = [];
+  for (var op=0; op<plans.length; op++) {
+    var found=false;
+    for (var opp=0; opp<projects.length; opp++) {
+      if (projects[opp].rec.id === plans[op].rec.parentId) { found=true; break; }
+    }
+    if (!found) orphans.push(plans[op]);
+  }
+  if (orphans.length) {
+    html += '<tr style="background:#fff8e1;"><td colspan="7" style="font-size:11px;color:#92400e;padding:6px 0;">Unlinked plans (no parent project):</td></tr>';
+    for (var or2=0; or2<orphans.length; or2++) {
+      var op2=orphans[or2].rec, oidx=orphans[or2].idx;
+      html += '<tr><td colspan="2">'+op2.case+'</td><td>'+op2.name+'</td>'
+        +'<td style="text-align:right;">'+f$I(op2.deposit)+'</td>'
+        +'<td style="text-align:right;">'+f$(op2.spent)+'</td>'
+        +'<td></td>'
+        +'<td><button class="btn btn-sm btn-danger" onclick="delRec('+oidx+')">Remove</button></td></tr>';
+    }
+  }
+  el.innerHTML = '<div style="overflow-x:auto;"><table class="data-table"><thead><tr>'
+    +'<th>Case #</th><th>Plan type</th><th>Name</th>'
+    +'<th style="text-align:right;">Deposit</th>'
+    +'<th style="text-align:right;">Spent</th>'
+    +'<th style="text-align:right;">Remaining</th>'
+    +'<th>Actions</th>'
+    +'</tr></thead><tbody>'+html+'</tbody></table></div>';
+}
+
+function onNpParChange() {
+  var idx = parseInt(document.getElementById('np-par').value);
+  var newWrap = document.getElementById('np-new-proj-wrap');
+  var existInfo = document.getElementById('np-existing-proj-info');
+  if (isNaN(idx)||idx<0) {
+    if(newWrap) newWrap.style.display='block';
+    if(existInfo) existInfo.style.display='none';
+  } else {
+    if(newWrap) newWrap.style.display='none';
+    if(existInfo) {
+      existInfo.textContent='Linking to: '+records[idx].case+' -- '+records[idx].name;
+      existInfo.style.display='block';
+    }
+  }
+}
+
+function addPlan() {
+  var c = document.getElementById('np-case').value.trim();
+  var n = document.getElementById('np-name').value.trim();
+  if (!c||!n) { alert('Plan case number and name are required.'); return; }
+  var dep = parseFloat(document.getElementById('np-dep').value)||0;
+  var app = document.getElementById('np-app').value.trim();
+  var type = document.getElementById('np-type').value;
+  var parIdx = parseInt(document.getElementById('np-par').value);
+
+  function savePlanWithParent(projRecord) {
+    var planData = {
+      id: 'local_plan_'+Date.now(), rectype:'plan',
+      case:c, name:n, applicant:app, deposit:dep, spent:0,
+      type:type, parentId:projRecord.id,
+      parentCase:projRecord.case  // store case as backup for ID reconciliation
+    };
+    records.push(planData);
+    localStorage.setItem('sj_records', JSON.stringify(records));
+    if (dep>0) {
+      var ddata = {projectId:planData.id, projectCase:c, amount:dep, note:'Initial deposit', date:tod()};
+      deposits.push(ddata);
+      localStorage.setItem('sj_deposits', JSON.stringify(deposits));
+      api({method:'POST',body:{action:'addDeposit',data:ddata}}).catch(function(){});
+    }
+    api({method:'POST',body:{action:'addProject',data:planData}})
+      .then(function(res){
+        planData.id=res.id;
+        localStorage.setItem('sj_records',JSON.stringify(records));
+      })
+      .catch(function(){});
+    var clrIds = ['np-case','np-name','np-app','np-dep','np-proj-case','np-proj-name'];
+    for (var ci=0; ci<clrIds.length; ci++) { var cel=document.getElementById(clrIds[ci]); if(cel) cel.value=''; }
+    document.getElementById('np-par').value='';
+    onNpParChange();
+    renderRecTbl(); rDrop();
+  }
+
+  if (!isNaN(parIdx) && parIdx>=0) {
+    // Existing project selected — use it directly
+    savePlanWithParent(records[parIdx]);
+  } else {
+    // Create new project inline first, wait for real ID, then save plan
+    var projCase = document.getElementById('np-proj-case').value.trim();
+    var projName = document.getElementById('np-proj-name').value.trim();
+    if (!projCase||!projName) { alert('Enter a Project case number and name, or select an existing Project.'); return; }
+    // Check if project already exists locally
+    var existingProj = null;
+    for (var ep=0; ep<records.length; ep++) {
+      if (records[ep].rectype==='project' && records[ep].case===projCase) {
+        existingProj = records[ep]; break;
+      }
+    }
+    if (existingProj) {
+      savePlanWithParent(existingProj);
+    } else {
+      // Create project, wait for real ID from Sheets, THEN save plan
+      var projRecord = {id:'local_proj_'+Date.now(), rectype:'project', case:projCase, name:projName, applicant:app, deposit:0, spent:0, type:'Project', parentId:''};
+      records.push(projRecord);
+      localStorage.setItem('sj_records', JSON.stringify(records));
+      api({method:'POST',body:{action:'addProject',data:projRecord}})
+        .then(function(res){
+          projRecord.id = res.id; // update to real Sheets ID
+          localStorage.setItem('sj_records',JSON.stringify(records));
+          savePlanWithParent(projRecord); // now save plan with correct parentId
+        })
+        .catch(function(){
+          // API failed — save plan with local ID anyway, will reconcile on next sync
+          savePlanWithParent(projRecord);
+        });
+    }
+  }
+}
+
+function togParent() {} // kept for safety, no longer used
+
+function openDep(i) {
+  depIdx=i;
+  document.getElementById('hist-panel').style.display='none';
+  document.getElementById('dep-mod-title').textContent='Add deposit -- '+records[i].case;
+  document.getElementById('da-amt').value='';
+  document.getElementById('da-note').value='';
+  document.getElementById('da-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('dep-modal').style.display='block';
+}
+function saveDep() {
+  var amt=parseFloat(document.getElementById('da-amt').value)||0;
+  if (amt<=0) { alert('Enter amount > 0.'); return; }
+  var dv=document.getElementById('da-date').value;
+  var note=document.getElementById('da-note').value.trim()||'Deposit added';
+  var r=records[depIdx];
+  var ddata={projectId:r.id,projectCase:r.case,amount:amt,note:note,date:new Date(dv+'T12:00:00').toLocaleDateString('en-US')};
+  r.deposit=parseFloat((Number(r.deposit)+amt).toFixed(2));
+  deposits.push(ddata);
+  localStorage.setItem('sj_records',JSON.stringify(records));
+  localStorage.setItem('sj_deposits',JSON.stringify(deposits));
+  api({method:'POST',body:{action:'addDeposit',data:ddata}}).catch(function(){});
+  var t=document.getElementById('dep-toast');
+  t.textContent='Deposit of '+f$I(amt)+' added to '+r.case;
+  t.style.display='block'; setTimeout(function(){t.style.display='none';},4000);
+  document.getElementById('dep-modal').style.display='none';
+  renderRecTbl(); rDrop();
+}
+function openHist(i) {
+  var r=records[i];
+  document.getElementById('dep-modal').style.display='none';
+  document.getElementById('hist-title').textContent='Deposit history -- '+r.case;
+  var h=[];
+  for (var j=0;j<deposits.length;j++) { if(deposits[j].projectCase===r.case||deposits[j].projectId===r.id) h.push(deposits[j]); }
+  var hHTML='';
+  for (var k=0;k<h.length;k++) {
+    hHTML+='<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:12px;">'
+      +'<span class="badge b-green">+'+f$I(h[k].amount)+'</span>'
+      +'<span style="flex:1;">'+h[k].note+'</span>'
+      +'<span style="color:#666;">'+h[k].date+'</span></div>';
+  }
+  var tot=0; for(var t=0;t<h.length;t++) tot+=Number(h[t].amount);
+  document.getElementById('hist-list').innerHTML=h.length
+    ? hHTML+'<div style="padding-top:8px;font-size:12px;color:#666;">Total deposited: <strong>'+f$I(tot)+'</strong></div>'
+    : '<div class="empty">No deposit history.</div>';
+  document.getElementById('hist-panel').style.display='block';
+}
+function delRec(i) {
+  if (!confirm('Remove "'+records[i].case+'"?')) return;
+  api({method:'POST',body:{action:'deleteProject',data:{id:records[i].id}}}).catch(function(){});
+  records.splice(i,1);
+  localStorage.setItem('sj_records',JSON.stringify(records));
+  renderRecTbl(); rDrop();
+}
+function togParent() {
+  var p=document.getElementById('np-rt').value==='plan';
+  document.getElementById('np-par-wrap').style.display=p?'block':'none';
+}
+
+// ── Planner management ────────────────────────────────────────
+function renderPlannerListUI() {
+  var el = document.getElementById('planner-list-ui');
+  if (!el) return;
+  if (!planners.length) { el.innerHTML='<div class="empty">No planners yet.</div>'; return; }
+  var html='';
+  for (var i=0; i<planners.length; i++) {
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">'
+      +'<span>'+planners[i]+'</span>'
+      +'<button class="btn btn-sm btn-danger" onclick="removePlanner('+i+')">Remove</button>'
+      +'</div>';
+  }
+  el.innerHTML = html;
+}
+function addPlanner() {
+  var input = document.getElementById('new-planner-input');
+  var name = input.value.trim();
+  if (!name) { alert('Enter a planner name.'); return; }
+  if (planners.indexOf(name) >= 0) { alert(name+' is already in the list.'); return; }
+  planners.push(name);
+  input.value = '';
+  savePlanners();
+}
+function removePlanner(i) {
+  if (!confirm('Remove "'+planners[i]+'" from the planner list?')) return;
+  planners.splice(i, 1);
+  savePlanners();
+}
+function savePlanners() {
+  renderPlannerDropdowns();
+  renderPlannerListUI();
+  api({method:'POST', body:{action:'savePlanners', data:{planners:planners}}})
+    .then(function(){ setSyncStatus('ok'); })
+    .catch(function(){ setSyncStatus('err','Planners saved locally only'); });
+}
+
+// ── Data management ───────────────────────────────────────────
+function reconcileParentIds() {
+  // Build map of project case number -> real id
+  var caseToId = {};
+  var projIds = {};
+  for (var i=0; i<records.length; i++) {
+    if (records[i].rectype === 'project') {
+      caseToId[records[i].case] = records[i].id;
+      projIds[records[i].id] = true;
+    }
+  }
+  // Fix any plan whose parentId doesn't match a known project id
+  for (var k=0; k<records.length; k++) {
+    var r = records[k];
+    if (r.rectype !== 'plan') continue;
+    if (!projIds[r.parentId]) {
+      if (r.parentCase && caseToId[r.parentCase]) {
+        r.parentId = caseToId[r.parentCase];
+      }
+    }
+  }
+}
+
+function syncFromSheet() {
+  var btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Syncing...';
+  setSyncStatus('syncing');
+  api({ method: 'GET', query: { action: 'getAll' } })
+    .then(function(data) {
+      records  = (data && data.projects)  ? data.projects  : [];
+      sessions = (data && data.sessions)  ? data.sessions  : [];
+      deposits = (data && data.deposits)  ? data.deposits  : [];
+      if (data && data.planners && data.planners.length) planners = data.planners;
+      reconcileParentIds();
+      localStorage.setItem('sj_records',  JSON.stringify(records));
+      localStorage.setItem('sj_sessions', JSON.stringify(sessions));
+      localStorage.setItem('sj_deposits', JSON.stringify(deposits));
+      setSyncStatus('ok');
+      renderPlannerDropdowns();
+      renderPlannerListUI();
+      renderRecTbl();
+      rDrop();
+      updMetrics();
+      var res = document.getElementById('sync-result');
+      res.textContent = 'Sync complete -- ' + records.length + ' projects/plans, ' + sessions.length + ' sessions loaded from Google Sheets.';
+      res.style.display = 'block';
+      setTimeout(function(){ res.style.display='none'; }, 5000);
+      btn.disabled = false;
+      btn.textContent = 'Sync now';
+    })
+    .catch(function(e) {
+      setSyncStatus('err', e.message);
+      alert('Sync failed: ' + e.message);
+      btn.disabled = false;
+      btn.textContent = 'Sync now';
+    });
+}
+
+function clearLocalCache() {
+  if (!confirm('This will clear all locally cached data from this browser.\n\nYour Google Sheet data is NOT affected.\n\nThe app will reload fresh from Sheets. Continue?')) return;
+  localStorage.removeItem('sj_records');
+  localStorage.removeItem('sj_sessions');
+  localStorage.removeItem('sj_deposits');
+  records = []; sessions = []; deposits = [];
+  renderRecTbl(); rDrop(); renderPlannerListUI(); updMetrics();
+  var res = document.getElementById('sync-result');
+  res.textContent = 'Local cache cleared. Reloading from Google Sheets...';
+  res.style.display = 'block';
+  setSyncStatus('syncing');
+  setTimeout(function() {
+    api({ method: 'GET', query: { action: 'getAll' } })
+      .then(function(data) {
+        records  = (data && data.projects)  ? data.projects  : [];
+        sessions = (data && data.sessions)  ? data.sessions  : [];
+        deposits = (data && data.deposits)  ? data.deposits  : [];
+        if (data && data.planners && data.planners.length) planners = data.planners;
+        reconcileParentIds();
+        localStorage.setItem('sj_records',  JSON.stringify(records));
+        localStorage.setItem('sj_sessions', JSON.stringify(sessions));
+        localStorage.setItem('sj_deposits', JSON.stringify(deposits));
+        setSyncStatus('ok');
+        renderPlannerDropdowns();
+        renderPlannerListUI();
+        renderRecTbl();
+        rDrop();
+        updMetrics();
+        res.textContent = 'Done -- loaded ' + records.length + ' projects/plans and ' + sessions.length + ' sessions from Google Sheets.';
+        setTimeout(function(){ res.style.display='none'; }, 5000);
+      })
+      .catch(function() {
+        setSyncStatus('err','Could not reach Sheets');
+        res.textContent = 'Cache cleared but could not reach Google Sheets. Data will sync next time you open the app.';
+      });
+  }, 500);
+}
+
+// ── Navigation ────────────────────────────────────────────────
+function showTab(t) {
+  var tabs=['tracker','manual','log','report','projects'];
+  for (var i=0;i<tabs.length;i++) {
+    document.getElementById('tab-'+tabs[i]).style.display=(tabs[i]===t?'':'none');
+  }
+  var btns=document.querySelectorAll('.tab');
+  for (var j=0;j<btns.length;j++) {
+    btns[j].classList.toggle('active', tabs[j]===t);
+  }
+  if (t==='log') renderLog();
+  if (t==='projects') { renderRecTbl(); rDrop(); renderPlannerListUI(); }
+  if (t==='tracker')  { updMetrics(); rDrop(); }
+  if (t==='manual')   { rDrop(); renderManR(); }
+}
+function showSub(id) {
+  var subs=['rpt-s','rpt-w'];
+  for (var i=0;i<subs.length;i++) {
+    document.getElementById(subs[i]).style.display=(subs[i]===id?'':'none');
+  }
+  var btns=document.querySelectorAll('.sub-tab');
+  for (var j=0;j<btns.length;j++) {
+    btns[j].classList.toggle('active', subs[j]===id);
+  }
+}
+
+// ── Boot ─────────────────────────────────────────────────────
+(function() {
+  if (sessionStorage.getItem('sj_pin_ok') === '1') {
+    var ps = document.getElementById('pin-screen');
+    if (ps) ps.style.display = 'none';
+    init();
+  }
+})();
+</script>
+</body>
+</html>

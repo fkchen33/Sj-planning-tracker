@@ -285,9 +285,15 @@ function checkPin() {
     <div class="logo-bar"></div>
     <div class="logo-text">Planning Time Tracker<br/><span class="logo-sub">City of San Jacinto — Planning Division</span></div>
   </div>
-  <div class="sync-status">
-    <div class="sync-dot" id="sync-dot"></div>
-    <span id="sync-lbl">Connecting...</span>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <button id="pip-btn" onclick="openMiniTimer()" title="Pop out mini timer" style="padding:6px 12px;border-radius:8px;border:1px solid #d0d0d0;background:#fff;color:#1a1a1a;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;font-weight:500;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="13" y="10" width="9" height="7" rx="1" fill="currentColor" stroke="none"/></svg>
+      Mini timer
+    </button>
+    <div class="sync-status">
+      <div class="sync-dot" id="sync-dot"></div>
+      <span id="sync-lbl">Connecting...</span>
+    </div>
   </div>
 </header>
 
@@ -1471,6 +1477,303 @@ function clearLocalCache(){
       })
       .catch(function(){setSyncStatus('err','Could not reach Sheets');res.textContent='Cache cleared but could not reach Sheets.';});
   },500);
+}
+
+// ── Mini Timer (Picture-in-Picture) ───────────────────────────
+var pipWindow = null;
+
+function openMiniTimer() {
+  // Check API support
+  if (!window.documentPictureInPicture) {
+    alert('Mini timer requires Chrome 116 or newer.\n\nTo use: make sure you are on the latest version of Chrome or Edge.');
+    return;
+  }
+
+  // If already open, focus it
+  if (pipWindow && !pipWindow.closed) {
+    pipWindow.focus();
+    return;
+  }
+
+  window.documentPictureInPicture.requestWindow({
+    width: 320,
+    height: 420,
+    disallowReturnToOpener: false
+  }).then(function(pip) {
+    pipWindow = pip;
+    buildMiniTimerUI(pip);
+
+    pip.addEventListener('pagehide', function() {
+      pipWindow = null;
+      document.getElementById('pip-btn').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="13" y="10" width="9" height="7" rx="1" fill="currentColor" stroke="none"/></svg> Mini timer';
+    });
+
+    document.getElementById('pip-btn').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="13" y="10" width="9" height="7" rx="1" fill="currentColor" stroke="none"/></svg> Mini timer &#10003;';
+  }).catch(function(e) {
+    console.log('PiP error:', e);
+    alert('Could not open mini timer. Make sure you are using Chrome 116+ and the page is focused.');
+  });
+}
+
+function buildMiniTimerUI(pip) {
+  var doc = pip.document;
+  doc.head.innerHTML = '<style>' + getMiniStyles() + '</style>';
+
+  doc.body.innerHTML = getMiniHTML();
+  doc.body.style.margin = '0';
+  doc.body.style.overflow = 'hidden';
+
+  // Populate project dropdown
+  populateMiniProjects(doc);
+
+  // Sync current timer state
+  syncMiniState(doc);
+
+  // Listen for timer ticks from main window
+  var syncInterval = setInterval(function() {
+    if (!pip || pip.closed) { clearInterval(syncInterval); return; }
+    syncMiniState(doc);
+  }, 500);
+
+  // Wire up project change
+  doc.getElementById('mini-proj').addEventListener('change', function() {
+    var idx = parseInt(this.value);
+    if (isNaN(idx)||idx<0) {
+      doc.getElementById('mini-plan-wrap').style.display='none';
+      return;
+    }
+    var proj = records[idx];
+    var plans = getProjPlans(proj.id);
+    var planOpts = '<option value="">-- select plan --</option>';
+    for (var i=0; i<plans.length; i++) {
+      planOpts += '<option value="'+plans[i].idx+'">'+plans[i].rec.case+' -- '+plans[i].rec.name+'</option>';
+    }
+    doc.getElementById('mini-plan').innerHTML = planOpts;
+    doc.getElementById('mini-plan-wrap').style.display = 'block';
+    // Sync to main app
+    syncProjToMain(doc);
+    updateMiniBalance(doc);
+  });
+
+  doc.getElementById('mini-plan').addEventListener('change', function() {
+    syncProjToMain(doc);
+    updateMiniBalance(doc);
+  });
+
+  doc.getElementById('mini-planner').addEventListener('change', function() {
+    document.getElementById('t-planner').value = this.value;
+    updMetrics();
+  });
+
+  doc.getElementById('mini-act').addEventListener('change', function() {
+    document.getElementById('t-act').value = this.value;
+  });
+
+  // Timer buttons
+  doc.getElementById('mini-start').addEventListener('click', function() {
+    // Sync selections to main app first
+    syncProjToMain(doc);
+    startTimer();
+    syncMiniState(doc);
+  });
+  doc.getElementById('mini-pause').addEventListener('click', function() {
+    if (running) pauseTimer(); else if (paused) startTimer();
+    syncMiniState(doc);
+  });
+  doc.getElementById('mini-stop').addEventListener('click', function() {
+    stopTimer();
+    syncMiniState(doc);
+    updateMiniBalance(doc);
+  });
+  doc.getElementById('mini-minus10').addEventListener('click', function() { adjTimer(-10); });
+  doc.getElementById('mini-plus10').addEventListener('click', function() { adjTimer(10); });
+}
+
+function syncProjToMain(doc) {
+  var projIdx = parseInt(doc.getElementById('mini-proj').value);
+  var planIdx = parseInt(doc.getElementById('mini-plan').value);
+  if (!isNaN(projIdx)&&projIdx>=0) {
+    document.getElementById('t-proj').value = projIdx;
+    aProjIdx = projIdx;
+    onTProj();
+  }
+  if (!isNaN(planIdx)&&planIdx>=0) {
+    document.getElementById('t-plan').value = planIdx;
+    aPlanIdx = planIdx;
+    onTPlan();
+  }
+}
+
+function syncMiniState(doc) {
+  if (!doc || !doc.getElementById('mini-time')) return;
+  // Update time display
+  doc.getElementById('mini-time').textContent = fmt(elapsed);
+  // Update status
+  var statusEl = doc.getElementById('mini-status');
+  var dotEl = doc.getElementById('mini-dot');
+  if (running) {
+    statusEl.textContent = 'Recording...';
+    dotEl.className = 'mini-dot running';
+  } else if (paused) {
+    statusEl.textContent = 'Paused';
+    dotEl.className = 'mini-dot paused';
+  } else {
+    statusEl.textContent = 'Idle';
+    dotEl.className = 'mini-dot idle';
+  }
+  // Update buttons
+  var startBtn = doc.getElementById('mini-start');
+  var pauseBtn = doc.getElementById('mini-pause');
+  var stopBtn  = doc.getElementById('mini-stop');
+  if (startBtn) {
+    startBtn.disabled = running;
+    startBtn.textContent = paused ? 'Resume' : 'Start';
+  }
+  if (pauseBtn) {
+    pauseBtn.disabled = !running;
+    pauseBtn.textContent = running ? 'Pause' : 'Paused';
+  }
+  if (stopBtn) stopBtn.disabled = (!running && !paused);
+  // Show active project/plan
+  var projLbl = doc.getElementById('mini-proj-label');
+  if (projLbl) {
+    if (aProjIdx>=0 && aPlanIdx>=0) {
+      projLbl.textContent = records[aProjIdx].case + ' / ' + records[aPlanIdx].case;
+      projLbl.style.display = 'block';
+    } else {
+      projLbl.style.display = 'none';
+    }
+  }
+  updateMiniBalance(doc);
+}
+
+function updateMiniBalance(doc) {
+  if (!doc) return;
+  var balEl = doc.getElementById('mini-balance');
+  var hrsEl = doc.getElementById('mini-hrs');
+  var barEl = doc.getElementById('mini-bar');
+  if (!balEl) return;
+  if (aProjIdx < 0) { balEl.textContent='--'; hrsEl.textContent=''; barEl.style.width='0%'; return; }
+  var bal = getProjBalance(records[aProjIdx].id, elapsed);
+  var pct = bal.deposit>0?Math.max(0,Math.min(100,(bal.remaining/bal.deposit)*100)):0;
+  var hrs = bal.deposit>0?bal.remaining/RATE:0;
+  balEl.textContent = f$(bal.remaining);
+  hrsEl.textContent = '~' + hrs.toFixed(1) + ' hrs remaining';
+  barEl.style.width = pct.toFixed(1)+'%';
+  barEl.style.background = pct>40?'#1D9E75':pct>20?'#BA7517':'#E24B4A';
+  balEl.style.color = pct>40?'#6ee7b7':pct>20?'#fcd34d':'#fca5a5';
+}
+
+function populateMiniProjects(doc) {
+  var sel = doc.getElementById('mini-proj');
+  var opts = '<option value="">-- select project --</option>';
+  for (var i=0; i<records.length; i++) {
+    if (records[i].rectype==='project') {
+      opts += '<option value="'+i+'"'+(i===aProjIdx?' selected':'')+'>'+records[i].case+' -- '+records[i].name+'</option>';
+    }
+  }
+  sel.innerHTML = opts;
+
+  // Populate planner
+  var psel = doc.getElementById('mini-planner');
+  var popts = '';
+  for (var j=0; j<planners.length; j++) {
+    var cur = document.getElementById('t-planner').value;
+    popts += '<option value="'+planners[j]+'"'+(planners[j]===cur?' selected':'')+'>'+planners[j]+'</option>';
+  }
+  psel.innerHTML = popts;
+
+  // If project already selected in main, mirror it
+  if (aProjIdx >= 0) {
+    sel.value = aProjIdx;
+    var proj = records[aProjIdx];
+    var plans = getProjPlans(proj.id);
+    var planOpts = '<option value="">-- select plan --</option>';
+    for (var k=0; k<plans.length; k++) {
+      planOpts += '<option value="'+plans[k].idx+'"'+(plans[k].idx===aPlanIdx?' selected':'')+'>'+plans[k].rec.case+' -- '+plans[k].rec.name+'</option>';
+    }
+    doc.getElementById('mini-plan').innerHTML = planOpts;
+    doc.getElementById('mini-plan-wrap').style.display = 'block';
+  }
+}
+
+function getMiniStyles() {
+  return '*{box-sizing:border-box;margin:0;padding:0;}'
+    +'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:#1a1a2e;color:#e8e8e8;padding:12px;height:100vh;overflow:hidden;}'
+    +'.header{display:flex;align-items:center;gap:6px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #2a2a3e;}'
+    +'.logo-bar{width:3px;height:18px;background:#C00;border-radius:2px;flex-shrink:0;}'
+    +'.logo-txt{font-size:11px;font-weight:600;color:#e8e8e8;line-height:1.3;}'
+    +'.logo-sub{font-size:10px;color:#888;font-weight:400;}'
+    +'select,input{width:100%;padding:6px 9px;border:1px solid #2a2a4e;border-radius:6px;background:#0d0d1a;color:#e8e8e8;font-size:11px;font-family:inherit;margin-bottom:6px;}'
+    +'select:focus,input:focus{outline:1px solid #378ADD;}'
+    +'.lbl{font-size:10px;color:#888;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;display:block;}'
+    +'.time{font-size:42px;font-weight:200;letter-spacing:3px;text-align:center;color:#fff;padding:8px 0 4px;font-variant-numeric:tabular-nums;}'
+    +'.status-row{display:flex;align-items:center;justify-content:center;gap:5px;font-size:11px;color:#888;margin-bottom:6px;}'
+    +'.mini-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}'
+    +'.mini-dot.idle{background:#555;}'
+    +'.mini-dot.running{background:#1D9E75;animation:pulse 1.2s infinite;}'
+    +'.mini-dot.paused{background:#BA7517;}'
+    +'@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}'
+    +'.btn-row{display:flex;gap:6px;margin-bottom:6px;}'
+    +'.btn{padding:7px 10px;border-radius:7px;border:1px solid #2a2a4e;background:#16213e;color:#e8e8e8;font-size:12px;cursor:pointer;font-family:inherit;font-weight:500;flex:1;transition:background .1s;}'
+    +'.btn:hover{background:#1a2a4e;}'
+    +'.btn:disabled{opacity:.35;cursor:not-allowed;}'
+    +'.btn.start{background:#0F6E56;border-color:#0F6E56;color:#fff;}'
+    +'.btn.start:hover{background:#085041;}'
+    +'.btn.pause{background:#854F0B;border-color:#854F0B;color:#fff;}'
+    +'.btn.stop{background:#7f1d1d;border-color:#7f1d1d;color:#fff;}'
+    +'.btn.adj{font-size:11px;padding:5px 8px;background:#0d0d1a;}'
+    +'.adj-row{display:flex;gap:5px;margin-bottom:8px;}'
+    +'.proj-label{font-size:10px;color:#378ADD;text-align:center;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    +'.bal-section{background:#0d0d1a;border-radius:8px;padding:8px 10px;}'
+    +'.bal-amount{font-size:16px;font-weight:600;color:#6ee7b7;}'
+    +'.bal-hrs{font-size:10px;color:#888;margin-top:1px;}'
+    +'.bal-bar-bg{height:5px;background:#1a1a2e;border-radius:3px;overflow:hidden;margin-top:6px;}'
+    +'.bal-bar-fill{height:100%;border-radius:3px;transition:width .5s,background .5s;background:#1D9E75;}';
+}
+
+function getMiniHTML() {
+  return '<div class="header">'
+    +'<div class="logo-bar"></div>'
+    +'<div class="logo-txt">SJ Planning<span class="logo-sub"> &nbsp;Mini Timer</span></div>'
+    +'</div>'
+    +'<span class="lbl">Project</span>'
+    +'<select id="mini-proj"></select>'
+    +'<div id="mini-plan-wrap" style="display:none;">'
+    +'<span class="lbl">Plan</span>'
+    +'<select id="mini-plan"><option value="">-- select plan --</option></select>'
+    +'</div>'
+    +'<div style="display:flex;gap:6px;">'
+    +'<div style="flex:1;"><span class="lbl">Planner</span><select id="mini-planner"></select></div>'
+    +'<div style="flex:1;"><span class="lbl">Activity</span>'
+    +'<select id="mini-act"><option value="">-- select --</option>'
+    +'<option>Pre-application meeting</option><option>Application intake review</option>'
+    +'<option>Plan review -- initial</option><option>Plan review -- resubmittal</option>'
+    +'<option>Conditions of approval</option><option>CEQA review</option>'
+    +'<option>Staff report preparation</option><option>Public hearing preparation</option>'
+    +'<option>Site inspection</option><option>Agency coordination</option>'
+    +'<option>Applicant correspondence</option><option>Administrative processing</option>'
+    +'<option>Other</option>'
+    +'</select></div>'
+    +'</div>'
+    +'<div class="status-row"><span class="mini-dot idle" id="mini-dot"></span><span id="mini-status">Idle</span></div>'
+    +'<div class="time" id="mini-time">00:00:00</div>'
+    +'<div id="mini-proj-label" class="proj-label" style="display:none;"></div>'
+    +'<div class="btn-row">'
+    +'<button class="btn start" id="mini-start">Start</button>'
+    +'<button class="btn pause" id="mini-pause" disabled>Pause</button>'
+    +'<button class="btn stop" id="mini-stop" disabled>Stop &amp; save</button>'
+    +'</div>'
+    +'<div class="adj-row">'
+    +'<button class="btn adj" id="mini-minus10">- 10 min</button>'
+    +'<button class="btn adj" id="mini-plus10">+ 10 min</button>'
+    +'</div>'
+    +'<div class="bal-section">'
+    +'<div style="font-size:10px;color:#888;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;">Project balance</div>'
+    +'<div class="bal-amount" id="mini-balance">--</div>'
+    +'<div class="bal-hrs" id="mini-hrs"></div>'
+    +'<div class="bal-bar-bg"><div class="bal-bar-fill" id="mini-bar" style="width:0%;"></div></div>'
+    +'</div>';
 }
 
 // ── Navigation ────────────────────────────────────────────────

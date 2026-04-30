@@ -726,6 +726,8 @@ function f$(n){return '$'+Math.max(0,n).toLocaleString('en-US',{minimumFractionD
 function f$I(n){return '$'+Math.max(0,n).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});}
 function fHrs(secs){return (secs/3600).toFixed(1)+' hrs';}
 function tod(){return new Date().toLocaleDateString('en-US');}
+// Round raw seconds to nearest 15-minute (quarter-hour) increment
+function roundQ(secs){return Math.round(secs/900)*900;}
 function fmtDate(d){if(!d)return '';var dt=new Date(d);if(isNaN(dt.getTime()))return String(d);return (dt.getMonth()+1)+'/'+dt.getDate()+'/'+dt.getFullYear();}
 function mBadge(r){var cls=r.rectype==='project'?'b-proj':'b-plan';var lbl=r.rectype==='project'?'Project':'Plan';return '<span class="badge '+cls+'">'+lbl+'</span>';}
 
@@ -897,8 +899,9 @@ function stopTimer(){
   clearInterval(tInt);
   if(elapsed>0&&aPlanIdx>=0){
     var proj=records[aProjIdx],plan=records[aPlanIdx];
-    var charge=parseFloat(((elapsed/3600)*RATE).toFixed(2));
-    var sdata={recIdx:String(aPlanIdx),projCase:proj.case,projName:proj.name,case:plan.case,name:plan.name,rectype:'plan',activity:document.getElementById('t-act').value||'Review',note:document.getElementById('t-note').value.trim(),planner:document.getElementById('t-planner').value,seconds:elapsed,charge:charge,date:tod(),source:'timer'};
+    var rounded=roundQ(elapsed);
+    var charge=parseFloat(((rounded/3600)*RATE).toFixed(2));
+    var sdata={recIdx:String(aPlanIdx),projCase:proj.case,projName:proj.name,case:plan.case,name:plan.name,rectype:'plan',activity:document.getElementById('t-act').value||'Review',note:document.getElementById('t-note').value.trim(),planner:document.getElementById('t-planner').value,seconds:rounded,charge:charge,date:tod(),source:'timer'};
     plan.spent=parseFloat((Number(plan.spent)+charge).toFixed(2));
     sessions.push(sdata);
     localStorage.setItem('sj_sessions',JSON.stringify(sessions));
@@ -975,7 +978,7 @@ function saveMan(){
   if(isNaN(planIdx)||planIdx<0){alert('Select a plan.');return;}
   var dv=document.getElementById('m-date').value;if(!dv){alert('Enter a date.');return;}
   var h=parseFloat(document.getElementById('m-h').value)||0,m=parseInt(document.getElementById('m-m').value)||0;
-  var secs=h*3600+m*60;if(secs<=0){alert('Enter time greater than zero.');return;}
+  var secs=roundQ(h*3600+m*60);if(secs<=0){alert('Enter time greater than zero.');return;}
   var proj=records[projIdx],plan=records[planIdx];
   var charge=parseFloat(((secs/3600)*RATE).toFixed(2));
   var ds=new Date(dv+'T12:00:00').toLocaleDateString('en-US');
@@ -1151,8 +1154,21 @@ function genWS(){
   var mses=[];
   for(var i=0;i<sessions.length;i++){var d=new Date(sessions[i].date);if(sessions[i].planner===planner&&d.getFullYear()===year&&d.getMonth()===month)mses.push(sessions[i]);}
   if(!mses.length){document.getElementById('ws-out').innerHTML='<div class="empty">No sessions found for '+planner+' in '+MONTHS[month]+' '+year+'.</div>';return;}
-  // One row per session (not grouped)
-  var rows=mses.slice().sort(function(a,b){return a.case<b.case?-1:a.case>b.case?1:0;});
+  // Consolidate: group by date + plan case + activity + note
+  var groupMap={}, groupKeys=[];
+  for(var gi=0;gi<mses.length;gi++){
+    var gs=mses[gi];
+    var gk=gs.date+'||'+gs.case+'||'+(gs.activity||'')+'||'+(gs.note||'');
+    if(!groupMap[gk]){
+      groupMap[gk]={date:gs.date,case:gs.case,name:gs.name,projCase:gs.projCase,activity:gs.activity,note:gs.note,seconds:0,charge:0,recIdx:gs.recIdx};
+      groupKeys.push(gk);
+    }
+    groupMap[gk].seconds+=Number(gs.seconds);
+    groupMap[gk].charge+=Number(gs.charge);
+  }
+  var rows=[];
+  for(var rk=0;rk<groupKeys.length;rk++) rows.push(groupMap[groupKeys[rk]]);
+  rows.sort(function(a,b){return a.case<b.case?-1:a.case>b.case?1:0;});
   var totS=0;for(var t=0;t<rows.length;t++)totS+=Number(rows[t].seconds);
   var totF=parseFloat(((totS/3600)*RATE).toFixed(2));
   // Day totals

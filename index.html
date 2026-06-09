@@ -846,10 +846,12 @@ function bootApp() {
         if(data&&data.sessions) sessions=data.sessions;
         if(data&&data.deposits) deposits=data.deposits;
         if(data&&data.planners&&data.planners.length) planners=data.planners;
+        if(data&&data.aiLogs) aiLogs=data.aiLogs;
         reconcileParentIds();
         localStorage.setItem('sj_records',JSON.stringify(records));
         localStorage.setItem('sj_sessions',JSON.stringify(sessions));
         localStorage.setItem('sj_deposits',JSON.stringify(deposits));
+        localStorage.setItem('sj_ai_logs',JSON.stringify(aiLogs));
         setSyncStatus('ok');
         renderPlannerDropdowns();
         buildProjOptCache();
@@ -2005,6 +2007,9 @@ function saveAILog() {
 
   aiLogs.push(entry);
   localStorage.setItem('sj_ai_logs', JSON.stringify(aiLogs));
+  api({method:'POST',body:{action:'saveAILog',data:entry}}).then(function(res){
+    if(res&&res.id) entry.id=res.id;
+  }).catch(function(){});
 
   var t = document.getElementById('ailog-toast');
   if (t) { t.className = 'toast'; t.textContent = 'AI log entry saved for ' + proj.case + '.'; t.style.display = 'block'; setTimeout(function(){ t.style.display = 'none'; }, 4000); }
@@ -2075,6 +2080,10 @@ function renderAILog() {
 
 function delAILog(ri) {
   if (!confirm('Delete this AI log entry?')) return;
+  var entry = aiLogs[ri];
+  if (entry && entry.id) {
+    api({method:'POST',body:{action:'deleteAILog',data:{id:entry.id}}}).catch(function(){});
+  }
   aiLogs.splice(ri, 1);
   localStorage.setItem('sj_ai_logs', JSON.stringify(aiLogs));
   renderAILog();

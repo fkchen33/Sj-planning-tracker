@@ -304,6 +304,7 @@ function checkPin() {
     <button class="tab" onclick="showTab('log')">Session log</button>
     <button class="tab" onclick="showTab('report')">Report</button>
     <button class="tab" onclick="showTab('projects')">Projects &amp; Plans</button>
+    <button class="tab" onclick="showTab('ailog')">AI Log</button>
   </div>
 
   <!-- TIMER TAB -->
@@ -628,6 +629,146 @@ function checkPin() {
     </div>
   </div>
 
+  <!-- AI LOG TAB -->
+  <div id="tab-ailog" style="display:none;">
+    <div id="ailog-toast" class="toast"></div>
+
+    <!-- Entry form -->
+    <div class="card">
+      <div class="card-title">Log AI use</div>
+      <div class="grid2" style="margin-bottom:12px;">
+        <div class="form-group" style="margin:0;">
+          <label>Project</label>
+          <input type="text" id="ai-proj-search" placeholder="Type to search..." oninput="filterAILogProjDropdown()"/>
+          <select id="ai-proj" onchange="onAIProj()" style="margin-top:4px;"><option value="">-- select project --</option></select>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>Plan <span style="font-weight:400;color:#666;font-size:11px;">-- optional</span></label>
+          <select id="ai-plan"><option value="">-- select plan (optional) --</option></select>
+        </div>
+      </div>
+      <div class="grid2" style="margin-bottom:12px;">
+        <div class="form-group" style="margin:0;">
+          <label>Date</label>
+          <input type="text" id="ai-date"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>AI tool used</label>
+          <select id="ai-tool">
+            <option value="Claude.ai (Pro)">Claude.ai (Pro)</option>
+            <option value="Microsoft Copilot (M365 Enterprise)">Microsoft Copilot (M365 Enterprise)</option>
+            <option value="ChatGPT Enterprise">ChatGPT Enterprise</option>
+            <option value="Perplexity (Pro)">Perplexity (Pro)</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid2" style="margin-bottom:12px;">
+        <div class="form-group" style="margin:0;">
+          <label>Task performed</label>
+          <select id="ai-task">
+            <option value="">-- select task --</option>
+            <option value="Completeness letter draft">Completeness letter draft</option>
+            <option value="COA generation">COA generation</option>
+            <option value="Staff report drafting">Staff report drafting</option>
+            <option value="Document summarization">Document summarization</option>
+            <option value="CEQA checklist assistance">CEQA checklist assistance</option>
+            <option value="COA consistency review">COA consistency review</option>
+            <option value="Findings drafting">Findings drafting</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>Data tier</label>
+          <select id="ai-tier">
+            <option value="">-- select tier --</option>
+            <option value="Tier 1 - Public">Tier 1 — Public (no restrictions)</option>
+            <option value="Tier 2 - Internal Use">Tier 2 — Internal use (enterprise tools only)</option>
+            <option value="Tier 3 - Confidential (redacted)">Tier 3 — Confidential (redacted before upload)</option>
+          </select>
+        </div>
+      </div>
+      <div id="ai-tier3-warn" style="display:none;background:#fff8f0;border:1px solid #BA7517;border-radius:8px;padding:9px 13px;margin-bottom:12px;font-size:12px;color:#854F0B;">
+        Tier 3 selected — confirm species occurrence coordinates, cultural resource site numbers, and applicant PII were redacted before upload.
+      </div>
+      <div class="form-group">
+        <label>How output was reviewed before use</label>
+        <select id="ai-review">
+          <option value="">-- select review method --</option>
+          <option value="Reviewed and revised all output before inclusion in work product">Reviewed and revised all output before inclusion in work product</option>
+          <option value="Verified code citations against SJMC before use">Verified code citations against SJMC before use</option>
+          <option value="Verified COA language against project-specific requirements">Verified COA language against project-specific requirements</option>
+          <option value="Internal draft only -- not included in official work product">Internal draft only — not included in official work product</option>
+          <option value="Output not used -- determined inaccurate or insufficient">Output not used — determined inaccurate or insufficient</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Notes <span style="font-weight:400;color:#666;font-size:11px;">-- optional</span></label>
+        <input type="text" id="ai-notes" placeholder="e.g. Species occurrence data excluded from upload. COA revised to add SJMC citation."/>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary" onclick="saveAILog()">Save entry</button>
+        <button class="btn" onclick="clearAILog()">Clear</button>
+      </div>
+    </div>
+
+    <!-- Filter + log list -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        <div class="card-title" style="margin:0;">AI use entries</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="ai-filter-search" placeholder="Filter by case..." oninput="renderAILog()" style="width:160px;padding:5px 9px;font-size:12px;"/>
+          <select id="ai-filter-task" onchange="renderAILog()" style="width:auto;padding:5px 9px;font-size:12px;">
+            <option value="">All tasks</option>
+            <option value="Completeness letter draft">Completeness letter</option>
+            <option value="COA generation">COA generation</option>
+            <option value="Staff report drafting">Staff report</option>
+            <option value="Document summarization">Document summary</option>
+            <option value="CEQA checklist assistance">CEQA checklist</option>
+            <option value="COA consistency review">COA consistency</option>
+            <option value="Findings drafting">Findings</option>
+            <option value="Other">Other</option>
+          </select>
+          <button class="btn btn-sm" onclick="showAISummaryModal()">Generate case summary</button>
+        </div>
+      </div>
+      <div id="ailog-list"><div class="empty">No AI log entries yet.</div></div>
+    </div>
+  </div>
+
+  <!-- AI Case Summary Modal -->
+  <div id="ai-summary-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:none;align-items:center;justify-content:center;padding:20px;">
+    <div style="background:#fff;border-radius:14px;padding:24px 28px;max-width:680px;width:100%;max-height:90vh;overflow-y:auto;position:relative;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+        <div>
+          <div style="font-size:15px;font-weight:600;color:#1a1a1a;">AI Use Summary</div>
+          <div style="font-size:11px;color:#666;margin-top:2px;">Case record — retain with project file</div>
+        </div>
+        <button onclick="closeAISummaryModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666;padding:0 0 0 12px;line-height:1;">&#10005;</button>
+      </div>
+
+      <!-- Case selector for summary -->
+      <div style="background:#f4f5f7;border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+        <div class="form-group" style="margin-bottom:10px;">
+          <label>Select case for summary</label>
+          <select id="sum-proj" onchange="renderSummaryPreview()" style="margin-top:2px;"><option value="">-- select project --</option></select>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>Planner of record</label>
+          <select id="sum-planner" style="margin-top:2px;"></select>
+        </div>
+      </div>
+
+      <div id="sum-preview"><div class="empty" style="padding:16px;">Select a project above to preview the summary.</div></div>
+
+      <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="copySummary()" id="sum-copy-btn">Copy summary</button>
+        <button class="btn" onclick="printSummary()">Print / Save as PDF</button>
+        <button class="btn" onclick="closeAISummaryModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /container -->
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -682,6 +823,7 @@ function bootApp() {
   records  = JSON.parse(localStorage.getItem('sj_records')  || '[]');
   sessions = JSON.parse(localStorage.getItem('sj_sessions') || '[]');
   deposits = JSON.parse(localStorage.getItem('sj_deposits') || '[]');
+  initAILog();
   renderPlannerDropdowns();
   buildProjOptCache();
   rDrop();
@@ -1792,9 +1934,326 @@ function getMiniHTML() {
     +'</div>';
 }
 
+// ── AI Log ────────────────────────────────────────────────────
+var aiLogs = [];
+
+function initAILog() {
+  aiLogs = JSON.parse(localStorage.getItem('sj_ai_logs') || '[]');
+  var d = new Date();
+  var el = document.getElementById('ai-date');
+  if (el) el.value = (d.getMonth()+1)+'/'+d.getDate()+'/'+d.getFullYear();
+}
+
+function filterAILogProjDropdown() {
+  var search = document.getElementById('ai-proj-search');
+  var searchVal = search ? search.value.toLowerCase().trim() : '';
+  var sel = document.getElementById('ai-proj');
+  if (!sel) return;
+  var cur = sel.value;
+  var opts = '<option value="">-- select project --</option>';
+  for (var i = 0; i < allProjOpts.length; i++) {
+    var r = allProjOpts[i].rec;
+    if (searchVal && r.case.toLowerCase().indexOf(searchVal) < 0 && r.name.toLowerCase().indexOf(searchVal) < 0) continue;
+    opts += '<option value="' + allProjOpts[i].idx + '">' + r.case + ' -- ' + r.name + '</option>';
+  }
+  sel.innerHTML = opts;
+  sel.value = cur;
+}
+
+function onAIProj() {
+  var idx = parseInt(document.getElementById('ai-proj').value);
+  var planSel = document.getElementById('ai-plan');
+  if (!planSel) return;
+  if (isNaN(idx) || idx < 0) {
+    planSel.innerHTML = '<option value="">-- select plan (optional) --</option>';
+    return;
+  }
+  var proj = records[idx];
+  var plans = getProjPlans(proj.id);
+  var opts = '<option value="">-- select plan (optional) --</option>';
+  for (var i = 0; i < plans.length; i++) {
+    opts += '<option value="' + plans[i].idx + '">' + plans[i].rec.case + ' -- ' + plans[i].rec.name + '</option>';
+  }
+  planSel.innerHTML = opts;
+}
+
+function saveAILog() {
+  var projIdx = parseInt(document.getElementById('ai-proj').value);
+  if (isNaN(projIdx) || projIdx < 0) { alert('Select a project.'); return; }
+  var task = document.getElementById('ai-task').value;
+  if (!task) { alert('Select a task type.'); return; }
+  var review = document.getElementById('ai-review').value;
+  if (!review) { alert('Select a review method.'); return; }
+
+  var proj = records[projIdx];
+  var planIdx = parseInt(document.getElementById('ai-plan').value);
+  var plan = (!isNaN(planIdx) && planIdx >= 0) ? records[planIdx] : null;
+
+  var entry = {
+    id: 'ai_' + Date.now(),
+    date: document.getElementById('ai-date').value,
+    projCase: proj.case,
+    projName: proj.name,
+    planCase: plan ? plan.case : '',
+    tool: document.getElementById('ai-tool').value,
+    task: task,
+    tier: document.getElementById('ai-tier').value,
+    review: review,
+    notes: document.getElementById('ai-notes').value.trim(),
+    planner: document.getElementById('t-planner') ? document.getElementById('t-planner').value : ''
+  };
+
+  aiLogs.push(entry);
+  localStorage.setItem('sj_ai_logs', JSON.stringify(aiLogs));
+
+  var t = document.getElementById('ailog-toast');
+  if (t) { t.className = 'toast'; t.textContent = 'AI log entry saved for ' + proj.case + '.'; t.style.display = 'block'; setTimeout(function(){ t.style.display = 'none'; }, 4000); }
+
+  clearAILog();
+  renderAILog();
+}
+
+function clearAILog() {
+  var fields = ['ai-proj', 'ai-plan', 'ai-task', 'ai-tier', 'ai-review'];
+  for (var i = 0; i < fields.length; i++) { var el = document.getElementById(fields[i]); if (el) el.value = ''; }
+  var notes = document.getElementById('ai-notes'); if (notes) notes.value = '';
+  var search = document.getElementById('ai-proj-search'); if (search) search.value = '';
+  var warn = document.getElementById('ai-tier3-warn'); if (warn) warn.style.display = 'none';
+  var d = new Date();
+  var dateEl = document.getElementById('ai-date');
+  if (dateEl) dateEl.value = (d.getMonth()+1)+'/'+d.getDate()+'/'+d.getFullYear();
+  filterAILogProjDropdown();
+}
+
+function renderAILog() {
+  var el = document.getElementById('ailog-list');
+  if (!el) return;
+  var search = document.getElementById('ai-filter-search');
+  var searchVal = search ? search.value.toLowerCase().trim() : '';
+  var taskF = document.getElementById('ai-filter-task');
+  var taskVal = taskF ? taskF.value : '';
+
+  var list = [];
+  for (var i = aiLogs.length - 1; i >= 0; i--) {
+    var e = aiLogs[i];
+    if (searchVal && e.projCase.toLowerCase().indexOf(searchVal) < 0 && (e.planCase||'').toLowerCase().indexOf(searchVal) < 0) continue;
+    if (taskVal && e.task !== taskVal) continue;
+    list.push({e:e, idx:i});
+  }
+
+  if (!list.length) { el.innerHTML = '<div class="empty">No AI log entries yet.</div>'; return; }
+
+  var tierColors = {'Tier 1 - Public':'#d1fae5|#065f46', 'Tier 2 - Internal Use':'#dbeafe|#1e40af', 'Tier 3 - Confidential (redacted)':'#fef3c7|#92400e'};
+
+  var html = '';
+  for (var j = 0; j < list.length; j++) {
+    var e = list[j].e, ri = list[j].idx;
+    var tc = tierColors[e.tier] ? tierColors[e.tier].split('|') : ['#f4f5f7','#666'];
+    var tierBadge = e.tier ? '<span class="badge" style="background:'+tc[0]+';color:'+tc[1]+';">'+e.tier.replace('Tier 1 - ','T1 ').replace('Tier 2 - ','T2 ').replace('Tier 3 - ','T3 ')+'</span>' : '';
+    html += '<div class="srow" style="flex-wrap:wrap;gap:6px 8px;">'
+      + '<span style="min-width:90px;font-weight:600;font-size:12px;">' + e.projCase + '</span>'
+      + (e.planCase ? '<span style="font-size:11px;color:#666;min-width:80px;">' + e.planCase + '</span>' : '')
+      + '<span style="font-size:11px;color:#666;min-width:68px;">' + fmtDate(e.date) + '</span>'
+      + '<span style="font-size:11px;color:#1a1a1a;flex:1;">' + e.task + '</span>'
+      + tierBadge
+      + '<span style="font-size:11px;color:#666;">' + e.tool + '</span>'
+      + '<button class="btn btn-sm btn-danger" onclick="delAILog(' + ri + ')" style="flex-shrink:0;">Del</button>'
+      + '</div>'
+      + (e.notes ? '<div style="font-size:11px;color:#999;padding:0 0 8px 8px;border-bottom:1px solid #f0f0f0;">' + e.notes + '</div>' : '');
+  }
+  el.innerHTML = html;
+
+  // Wire up tier warning on form
+  var tierSel = document.getElementById('ai-tier');
+  if (tierSel) {
+    tierSel.onchange = function() {
+      var warn = document.getElementById('ai-tier3-warn');
+      if (warn) warn.style.display = (tierSel.value === 'Tier 3 - Confidential (redacted)') ? 'block' : 'none';
+    };
+  }
+}
+
+function delAILog(ri) {
+  if (!confirm('Delete this AI log entry?')) return;
+  aiLogs.splice(ri, 1);
+  localStorage.setItem('sj_ai_logs', JSON.stringify(aiLogs));
+  renderAILog();
+}
+
+function showAISummaryModal() {
+  var modal = document.getElementById('ai-summary-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+
+  // Populate project dropdown with only projects that have AI log entries
+  var seen = {}, projsWithLogs = [];
+  for (var i = 0; i < aiLogs.length; i++) {
+    if (!seen[aiLogs[i].projCase]) { seen[aiLogs[i].projCase] = true; projsWithLogs.push(aiLogs[i].projCase); }
+  }
+  var sumProj = document.getElementById('sum-proj');
+  if (sumProj) {
+    var opts = '<option value="">-- select project --</option>';
+    for (var j = 0; j < projsWithLogs.length; j++) opts += '<option value="' + projsWithLogs[j] + '">' + projsWithLogs[j] + '</option>';
+    sumProj.innerHTML = opts;
+  }
+
+  // Populate planner dropdown
+  var sumPl = document.getElementById('sum-planner');
+  if (sumPl) {
+    var plOpts = '';
+    for (var k = 0; k < planners.length; k++) plOpts += '<option>' + planners[k] + '</option>';
+    sumPl.innerHTML = plOpts;
+    if (document.getElementById('t-planner')) sumPl.value = document.getElementById('t-planner').value;
+  }
+
+  document.getElementById('sum-preview').innerHTML = '<div class="empty" style="padding:16px;">Select a project above to preview the summary.</div>';
+}
+
+function closeAISummaryModal() {
+  var modal = document.getElementById('ai-summary-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function renderSummaryPreview() {
+  var projCase = document.getElementById('sum-proj').value;
+  var planner = document.getElementById('sum-planner').value;
+  var el = document.getElementById('sum-preview');
+  if (!projCase) { el.innerHTML = '<div class="empty" style="padding:16px;">Select a project above to preview the summary.</div>'; return; }
+
+  var entries = [];
+  var projName = '';
+  for (var i = 0; i < aiLogs.length; i++) {
+    if (aiLogs[i].projCase === projCase) {
+      entries.push(aiLogs[i]);
+      if (!projName) projName = aiLogs[i].projName || projCase;
+    }
+  }
+  entries.sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
+
+  if (!entries.length) { el.innerHTML = '<div class="empty" style="padding:16px;">No AI log entries found for ' + projCase + '.</div>'; return; }
+
+  var today = new Date();
+  var todayStr = (today.getMonth()+1)+'/'+today.getDate()+'/'+today.getFullYear();
+
+  var tierColors = {'Tier 1 - Public':'#d1fae5|#065f46', 'Tier 2 - Internal Use':'#dbeafe|#1e40af', 'Tier 3 - Confidential (redacted)':'#fef3c7|#92400e'};
+
+  var rows = '';
+  for (var j = 0; j < entries.length; j++) {
+    var e = entries[j];
+    var tc = tierColors[e.tier] ? tierColors[e.tier].split('|') : ['#f4f5f7','#666'];
+    var tierCell = e.tier ? '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:'+tc[0]+';color:'+tc[1]+';font-weight:600;">'+e.tier.replace('Tier 1 - Public','T1').replace('Tier 2 - Internal Use','T2').replace('Tier 3 - Confidential (redacted)','T3 (redacted)')+'</span>' : '--';
+    rows += '<tr>'
+      + '<td style="padding:7px 8px 7px 0;border-bottom:1px solid #f0f0f0;font-size:11px;">' + fmtDate(e.date) + '</td>'
+      + '<td style="padding:7px 8px 7px 0;border-bottom:1px solid #f0f0f0;font-size:11px;">' + e.tool + '</td>'
+      + '<td style="padding:7px 8px 7px 0;border-bottom:1px solid #f0f0f0;font-size:11px;">' + e.task + (e.notes ? '<div style="font-size:10px;color:#999;margin-top:2px;">'+e.notes+'</div>' : '') + '</td>'
+      + '<td style="padding:7px 8px 7px 0;border-bottom:1px solid #f0f0f0;">' + tierCell + '</td>'
+      + '<td style="padding:7px 0 7px 0;border-bottom:1px solid #f0f0f0;font-size:11px;color:#666;">' + e.review + '</td>'
+      + '</tr>';
+  }
+
+  var tierCounts = {t1:0, t2:0, t3:0};
+  for (var k = 0; k < entries.length; k++) {
+    if (entries[k].tier === 'Tier 1 - Public') tierCounts.t1++;
+    else if (entries[k].tier === 'Tier 2 - Internal Use') tierCounts.t2++;
+    else if (entries[k].tier === 'Tier 3 - Confidential (redacted)') tierCounts.t3++;
+  }
+  var tierSummary = [];
+  if (tierCounts.t1) tierSummary.push(tierCounts.t1 + ' Tier 1 (public)');
+  if (tierCounts.t2) tierSummary.push(tierCounts.t2 + ' Tier 2 (internal use)');
+  if (tierCounts.t3) tierSummary.push(tierCounts.t3 + ' Tier 3 (confidential, redacted before upload)');
+
+  el.innerHTML = '<div id="summary-printable" style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Arial,sans-serif;font-size:12px;">'
+    // Header
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:1px solid #e0e0e0;margin-bottom:14px;">'
+    + '<div><div style="font-size:13px;font-weight:600;">City of San Jacinto — Planning Division</div><div style="font-size:11px;color:#666;margin-top:2px;">Planning Division</div></div>'
+    + '<div style="text-align:right;"><div style="font-size:13px;font-weight:600;">AI Use Summary</div><div style="font-size:11px;color:#666;margin-top:2px;">Retain with project file</div></div>'
+    + '</div>'
+    // Case meta
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;background:#f8f9fa;border-radius:8px;padding:12px 14px;margin-bottom:14px;">'
+    + '<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Case number</div><div style="font-size:13px;font-weight:600;margin-top:2px;">' + projCase + '</div></div>'
+    + '<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Project name</div><div style="font-size:13px;font-weight:600;margin-top:2px;">' + projName + '</div></div>'
+    + '<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Planner of record</div><div style="font-size:13px;font-weight:600;margin-top:2px;">' + planner + '</div></div>'
+    + '<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Report generated</div><div style="font-size:13px;font-weight:600;margin-top:2px;">' + todayStr + '</div></div>'
+    + '<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Total AI sessions</div><div style="font-size:13px;font-weight:600;margin-top:2px;">' + entries.length + '</div></div>'
+    + '<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Data tiers used</div><div style="font-size:12px;font-weight:500;margin-top:2px;">' + (tierSummary.join('; ') || '--') + '</div></div>'
+    + '</div>'
+    // Log table
+    + '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#999;margin-bottom:8px;">AI-assisted tasks</div>'
+    + '<table style="width:100%;border-collapse:collapse;">'
+    + '<thead><tr>'
+    + '<th style="text-align:left;font-size:10px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.05em;padding:0 8px 8px 0;border-bottom:1px solid #e0e0e0;">Date</th>'
+    + '<th style="text-align:left;font-size:10px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.05em;padding:0 8px 8px 0;border-bottom:1px solid #e0e0e0;">Tool</th>'
+    + '<th style="text-align:left;font-size:10px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.05em;padding:0 8px 8px 0;border-bottom:1px solid #e0e0e0;">Task &amp; notes</th>'
+    + '<th style="text-align:left;font-size:10px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.05em;padding:0 8px 8px 0;border-bottom:1px solid #e0e0e0;">Tier</th>'
+    + '<th style="text-align:left;font-size:10px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.05em;padding:0 0 8px 0;border-bottom:1px solid #e0e0e0;">Review</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table>'
+    // Attestation
+    + '<div style="margin-top:16px;padding-top:12px;border-top:1px solid #e0e0e0;">'
+    + '<div style="font-size:11px;color:#666;line-height:1.6;margin-bottom:14px;">I attest that all AI-assisted work product reflected in this log was reviewed and revised by me prior to inclusion in official planning documents. AI tools were used as drafting and research aids only. All discretionary findings, CEQA determinations, and approval conditions reflect my independent professional judgment.</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">'
+    + '<div><div style="border-bottom:1px solid #888;height:24px;margin-bottom:3px;"></div><div style="font-size:10px;color:#999;">Planner of record</div></div>'
+    + '<div><div style="border-bottom:1px solid #888;height:24px;margin-bottom:3px;"></div><div style="font-size:10px;color:#999;">Title</div></div>'
+    + '<div><div style="border-bottom:1px solid #888;height:24px;margin-bottom:3px;"></div><div style="font-size:10px;color:#999;">Date</div></div>'
+    + '</div></div>'
+    // Policy note
+    + '<div style="margin-top:12px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:10px;color:#aaa;line-height:1.6;">This record was generated in accordance with the City of San Jacinto Planning Division AI Acceptable Use procedure. Retain with the project file. Subject to disclosure under CPRA (Gov. Code §7920 et seq.).</div>'
+    + '</div>';
+}
+
+function copySummary() {
+  var el = document.getElementById('summary-printable');
+  if (!el) { alert('Generate a summary first.'); return; }
+  var projCase = document.getElementById('sum-proj').value;
+  var planner = document.getElementById('sum-planner').value;
+  if (!projCase) { alert('Select a project first.'); return; }
+
+  var entries = [];
+  for (var i = 0; i < aiLogs.length; i++) { if (aiLogs[i].projCase === projCase) entries.push(aiLogs[i]); }
+  entries.sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
+
+  var today = new Date();
+  var todayStr = (today.getMonth()+1)+'/'+today.getDate()+'/'+today.getFullYear();
+  var text = 'AI USE SUMMARY\nCity of San Jacinto — Planning Division\n';
+  text += '--------------------------------------------\n';
+  text += 'Case: ' + projCase + '\n';
+  text += 'Planner of record: ' + planner + '\n';
+  text += 'Report generated: ' + todayStr + '\n';
+  text += 'Total AI sessions: ' + entries.length + '\n\n';
+  text += 'AI-ASSISTED TASKS\n';
+  for (var j = 0; j < entries.length; j++) {
+    var e = entries[j];
+    text += '\n' + fmtDate(e.date) + ' | ' + e.tool + '\n';
+    text += 'Task: ' + e.task + '\n';
+    if (e.tier) text += 'Data tier: ' + e.tier + '\n';
+    text += 'Review: ' + e.review + '\n';
+    if (e.notes) text += 'Notes: ' + e.notes + '\n';
+  }
+  text += '\nATTESTATION\nI attest that all AI-assisted work product reflected in this log was reviewed and revised by me prior to inclusion in official planning documents. AI tools were used as drafting and research aids only.\n\nSignature: ________________  Title: ________________  Date: ________________\n';
+  text += '\nRetain with project file. Subject to CPRA disclosure (Gov. Code §7920 et seq.).';
+
+  navigator.clipboard.writeText(text).then(function() {
+    var btn = document.getElementById('sum-copy-btn');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(function(){ btn.textContent = 'Copy summary'; }, 2000); }
+  }).catch(function(){ alert('Copy failed — try the Print option instead.'); });
+}
+
+function printSummary() {
+  var el = document.getElementById('summary-printable');
+  if (!el) { alert('Generate a summary first.'); return; }
+  var projCase = document.getElementById('sum-proj').value;
+  if (!projCase) { alert('Select a project first.'); return; }
+  var w = window.open('', '_blank', 'width=780,height=900');
+  w.document.write('<!DOCTYPE html><html><head><title>AI Use Summary — ' + projCase + '</title>');
+  w.document.write('<style>body{font-family:Arial,sans-serif;font-size:12px;margin:0.5in;color:#111;}@media print{body{margin:0.4in;}}</style>');
+  w.document.write('</head><body>' + el.innerHTML + '</body></html>');
+  w.document.close();
+  w.focus();
+  setTimeout(function(){ w.print(); }, 400);
+}
+
 // ── Navigation ────────────────────────────────────────────────
 function showTab(t){
-  var tabs=['tracker','manual','log','report','projects'];
+  var tabs=['tracker','manual','log','report','projects','ailog'];
   for(var i=0;i<tabs.length;i++) document.getElementById('tab-'+tabs[i]).style.display=(tabs[i]===t?'':'none');
   var btns=document.querySelectorAll('.tab');
   for(var j=0;j<btns.length;j++) btns[j].classList.toggle('active',tabs[j]===t);
@@ -1802,6 +2261,7 @@ function showTab(t){
   if(t==='projects'){renderRecTbl();rDrop();renderPlannerListUI();}
   if(t==='tracker'){updMetrics();buildProjOptCache();filterProjDropdown();}
   if(t==='manual'){buildProjOptCache();rDrop();renderManR();}
+  if(t==='ailog'){buildProjOptCache();filterAILogProjDropdown();renderAILog();}
 }
 function showSub(id){
   var subs=['rpt-s','rpt-w'];

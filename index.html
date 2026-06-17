@@ -305,6 +305,7 @@ function checkPin() {
     <button class="tab" onclick="showTab('report')">Report</button>
     <button class="tab" onclick="showTab('projects')">Projects &amp; Plans</button>
     <button class="tab" onclick="showTab('ailog')">AI Log</button>
+    <button class="tab" onclick="showTab('prompts')">Prompt Library</button>
   </div>
 
   <!-- TIMER TAB -->
@@ -629,11 +630,11 @@ function checkPin() {
     </div>
   </div>
 
+</div><!-- /container -->
+
   <!-- AI LOG TAB -->
   <div id="tab-ailog" style="display:none;">
     <div id="ailog-toast" class="toast"></div>
-
-    <!-- Entry form -->
     <div class="card">
       <div class="card-title">Log AI use</div>
       <div class="grid2" style="margin-bottom:12px;">
@@ -648,10 +649,7 @@ function checkPin() {
         </div>
       </div>
       <div class="grid2" style="margin-bottom:12px;">
-        <div class="form-group" style="margin:0;">
-          <label>Date</label>
-          <input type="text" id="ai-date"/>
-        </div>
+        <div class="form-group" style="margin:0;"><label>Date</label><input type="text" id="ai-date"/></div>
         <div class="form-group" style="margin:0;">
           <label>AI tool used</label>
           <select id="ai-tool">
@@ -711,8 +709,6 @@ function checkPin() {
         <button class="btn" onclick="clearAILog()">Clear</button>
       </div>
     </div>
-
-    <!-- Filter + log list -->
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
         <div class="card-title" style="margin:0;">AI use entries</div>
@@ -737,7 +733,7 @@ function checkPin() {
   </div>
 
   <!-- AI Case Summary Modal -->
-  <div id="ai-summary-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:none;align-items:center;justify-content:center;padding:20px;">
+  <div id="ai-summary-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;align-items:center;justify-content:center;padding:20px;">
     <div style="background:#fff;border-radius:14px;padding:24px 28px;max-width:680px;width:100%;max-height:90vh;overflow-y:auto;position:relative;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
         <div>
@@ -746,8 +742,6 @@ function checkPin() {
         </div>
         <button onclick="closeAISummaryModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666;padding:0 0 0 12px;line-height:1;">&#10005;</button>
       </div>
-
-      <!-- Case selector for summary -->
       <div style="background:#f4f5f7;border-radius:10px;padding:14px 16px;margin-bottom:16px;">
         <div class="form-group" style="margin-bottom:10px;">
           <label>Select case for summary</label>
@@ -758,9 +752,7 @@ function checkPin() {
           <select id="sum-planner" style="margin-top:2px;"></select>
         </div>
       </div>
-
       <div id="sum-preview"><div class="empty" style="padding:16px;">Select a project above to preview the summary.</div></div>
-
       <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
         <button class="btn btn-primary" onclick="copySummary()" id="sum-copy-btn">Copy summary</button>
         <button class="btn" onclick="printSummary()">Print / Save as PDF</button>
@@ -769,7 +761,21 @@ function checkPin() {
     </div>
   </div>
 
-</div><!-- /container -->
+  <!-- PROMPT LIBRARY TAB -->
+  <div id="tab-prompts" style="display:none;">
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div class="card-title" style="margin:0;">Copilot Prompt Library</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span id="pl-count" style="font-size:12px;color:#888;"></span>
+          <button class="btn btn-sm" onclick="plToggleAll()"><span id="pl-expand-label">Expand all</span></button>
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;" id="pl-filters"></div>
+    </div>
+    <div id="pl-container"></div>
+  </div>
+
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
@@ -1966,16 +1972,11 @@ function onAIProj() {
   var idx = parseInt(document.getElementById('ai-proj').value);
   var planSel = document.getElementById('ai-plan');
   if (!planSel) return;
-  if (isNaN(idx) || idx < 0) {
-    planSel.innerHTML = '<option value="">-- select plan (optional) --</option>';
-    return;
-  }
+  if (isNaN(idx) || idx < 0) { planSel.innerHTML = '<option value="">-- select plan (optional) --</option>'; return; }
   var proj = records[idx];
   var plans = getProjPlans(proj.id);
   var opts = '<option value="">-- select plan (optional) --</option>';
-  for (var i = 0; i < plans.length; i++) {
-    opts += '<option value="' + plans[i].idx + '">' + plans[i].rec.case + ' -- ' + plans[i].rec.name + '</option>';
-  }
+  for (var i = 0; i < plans.length; i++) opts += '<option value="' + plans[i].idx + '">' + plans[i].rec.case + ' -- ' + plans[i].rec.name + '</option>';
   planSel.innerHTML = opts;
 }
 
@@ -1986,58 +1987,42 @@ function saveAILog() {
   if (!task) { alert('Select a task type.'); return; }
   var review = document.getElementById('ai-review').value;
   if (!review) { alert('Select a review method.'); return; }
-
   var proj = records[projIdx];
   var planIdx = parseInt(document.getElementById('ai-plan').value);
   var plan = (!isNaN(planIdx) && planIdx >= 0) ? records[planIdx] : null;
-
   var entry = {
     id: 'ai_' + Date.now(),
     date: document.getElementById('ai-date').value,
-    projCase: proj.case,
-    projName: proj.name,
+    projCase: proj.case, projName: proj.name,
     planCase: plan ? plan.case : '',
     tool: document.getElementById('ai-tool').value,
-    task: task,
-    tier: document.getElementById('ai-tier').value,
-    review: review,
-    notes: document.getElementById('ai-notes').value.trim(),
+    task: task, tier: document.getElementById('ai-tier').value,
+    review: review, notes: document.getElementById('ai-notes').value.trim(),
     planner: document.getElementById('t-planner') ? document.getElementById('t-planner').value : ''
   };
-
   aiLogs.push(entry);
   localStorage.setItem('sj_ai_logs', JSON.stringify(aiLogs));
-  api({method:'POST',body:{action:'saveAILog',data:entry}}).then(function(res){
-    if(res&&res.id) entry.id=res.id;
-  }).catch(function(){});
-
+  api({method:'POST',body:{action:'saveAILog',data:entry}}).then(function(res){ if(res&&res.id) entry.id=res.id; }).catch(function(){});
   var t = document.getElementById('ailog-toast');
-  if (t) { t.className = 'toast'; t.textContent = 'AI log entry saved for ' + proj.case + '.'; t.style.display = 'block'; setTimeout(function(){ t.style.display = 'none'; }, 4000); }
-
-  clearAILog();
-  renderAILog();
+  if (t) { t.className='toast'; t.textContent='AI log entry saved for '+proj.case+'.'; t.style.display='block'; setTimeout(function(){ t.style.display='none'; },4000); }
+  clearAILog(); renderAILog();
 }
 
 function clearAILog() {
-  var fields = ['ai-proj', 'ai-plan', 'ai-task', 'ai-tier', 'ai-review'];
+  var fields = ['ai-proj','ai-plan','ai-task','ai-tier','ai-review'];
   for (var i = 0; i < fields.length; i++) { var el = document.getElementById(fields[i]); if (el) el.value = ''; }
   var notes = document.getElementById('ai-notes'); if (notes) notes.value = '';
   var search = document.getElementById('ai-proj-search'); if (search) search.value = '';
   var warn = document.getElementById('ai-tier3-warn'); if (warn) warn.style.display = 'none';
-  var d = new Date();
-  var dateEl = document.getElementById('ai-date');
+  var d = new Date(); var dateEl = document.getElementById('ai-date');
   if (dateEl) dateEl.value = (d.getMonth()+1)+'/'+d.getDate()+'/'+d.getFullYear();
   filterAILogProjDropdown();
 }
 
 function renderAILog() {
-  var el = document.getElementById('ailog-list');
-  if (!el) return;
-  var search = document.getElementById('ai-filter-search');
-  var searchVal = search ? search.value.toLowerCase().trim() : '';
-  var taskF = document.getElementById('ai-filter-task');
-  var taskVal = taskF ? taskF.value : '';
-
+  var el = document.getElementById('ailog-list'); if (!el) return;
+  var searchVal = document.getElementById('ai-filter-search') ? document.getElementById('ai-filter-search').value.toLowerCase().trim() : '';
+  var taskVal = document.getElementById('ai-filter-task') ? document.getElementById('ai-filter-task').value : '';
   var list = [];
   for (var i = aiLogs.length - 1; i >= 0; i--) {
     var e = aiLogs[i];
@@ -2045,224 +2030,254 @@ function renderAILog() {
     if (taskVal && e.task !== taskVal) continue;
     list.push({e:e, idx:i});
   }
-
   if (!list.length) { el.innerHTML = '<div class="empty">No AI log entries yet.</div>'; return; }
-
-  var tierColors = {'Tier 1 - Public':'#d1fae5|#065f46', 'Tier 2 - Internal Use':'#dbeafe|#1e40af', 'Tier 3 - Confidential (redacted)':'#fef3c7|#92400e'};
-
+  var tierColors = {'Tier 1 - Public':'#d1fae5|#065f46','Tier 2 - Internal Use':'#dbeafe|#1e40af','Tier 3 - Confidential (redacted)':'#fef3c7|#92400e'};
   var html = '';
   for (var j = 0; j < list.length; j++) {
     var e = list[j].e, ri = list[j].idx;
     var tc = tierColors[e.tier] ? tierColors[e.tier].split('|') : ['#f4f5f7','#666'];
     var tierBadge = e.tier ? '<span class="badge" style="background:'+tc[0]+';color:'+tc[1]+';">'+e.tier.replace('Tier 1 - ','T1 ').replace('Tier 2 - ','T2 ').replace('Tier 3 - ','T3 ')+'</span>' : '';
     html += '<div class="srow" style="flex-wrap:wrap;gap:6px 8px;">'
-      + '<span style="min-width:90px;font-weight:600;font-size:12px;">' + e.projCase + '</span>'
-      + (e.planCase ? '<span style="font-size:11px;color:#666;min-width:80px;">' + e.planCase + '</span>' : '')
-      + '<span style="font-size:11px;color:#666;min-width:68px;">' + fmtDate(e.date) + '</span>'
-      + '<span style="font-size:11px;color:#1a1a1a;flex:1;">' + e.task + '</span>'
-      + tierBadge
-      + '<span style="font-size:11px;color:#666;">' + e.tool + '</span>'
-      + '<button class="btn btn-sm btn-danger" onclick="delAILog(' + ri + ')" style="flex-shrink:0;">Del</button>'
-      + '</div>'
-      + (e.notes ? '<div style="font-size:11px;color:#999;padding:0 0 8px 8px;border-bottom:1px solid #f0f0f0;">' + e.notes + '</div>' : '');
+      +'<span style="min-width:90px;font-weight:600;font-size:12px;">'+e.projCase+'</span>'
+      +(e.planCase?'<span style="font-size:11px;color:#666;min-width:80px;">'+e.planCase+'</span>':'')
+      +'<span style="font-size:11px;color:#666;min-width:68px;">'+fmtDate(e.date)+'</span>'
+      +'<span style="font-size:11px;color:#1a1a1a;flex:1;">'+e.task+'</span>'
+      +tierBadge+'<span style="font-size:11px;color:#666;">'+e.tool+'</span>'
+      +'<button class="btn btn-sm btn-danger" onclick="delAILog('+ri+')" style="flex-shrink:0;">Del</button></div>'
+      +(e.notes?'<div style="font-size:11px;color:#999;padding:0 0 8px 8px;border-bottom:1px solid #f0f0f0;">'+e.notes+'</div>':'');
   }
   el.innerHTML = html;
-
-  // Wire up tier warning on form
   var tierSel = document.getElementById('ai-tier');
-  if (tierSel) {
-    tierSel.onchange = function() {
-      var warn = document.getElementById('ai-tier3-warn');
-      if (warn) warn.style.display = (tierSel.value === 'Tier 3 - Confidential (redacted)') ? 'block' : 'none';
-    };
-  }
+  if (tierSel) { tierSel.onchange = function() { var w=document.getElementById('ai-tier3-warn'); if(w) w.style.display=(tierSel.value==='Tier 3 - Confidential (redacted)')?'block':'none'; }; }
 }
 
 function delAILog(ri) {
   if (!confirm('Delete this AI log entry?')) return;
   var entry = aiLogs[ri];
-  if (entry && entry.id) {
-    api({method:'POST',body:{action:'deleteAILog',data:{id:entry.id}}}).catch(function(){});
-  }
+  if (entry && entry.id) api({method:'POST',body:{action:'deleteAILog',data:{id:entry.id}}}).catch(function(){});
   aiLogs.splice(ri, 1);
   localStorage.setItem('sj_ai_logs', JSON.stringify(aiLogs));
   renderAILog();
 }
 
 function showAISummaryModal() {
-  var modal = document.getElementById('ai-summary-modal');
-  if (!modal) return;
+  var modal = document.getElementById('ai-summary-modal'); if (!modal) return;
   modal.style.display = 'flex';
-
-  // Populate project dropdown with only projects that have AI log entries
   var seen = {}, projsWithLogs = [];
-  for (var i = 0; i < aiLogs.length; i++) {
-    if (!seen[aiLogs[i].projCase]) { seen[aiLogs[i].projCase] = true; projsWithLogs.push(aiLogs[i].projCase); }
-  }
+  for (var i = 0; i < aiLogs.length; i++) { if (!seen[aiLogs[i].projCase]) { seen[aiLogs[i].projCase]=true; projsWithLogs.push(aiLogs[i].projCase); } }
   var sumProj = document.getElementById('sum-proj');
-  if (sumProj) {
-    var opts = '<option value="">-- select project --</option>';
-    for (var j = 0; j < projsWithLogs.length; j++) opts += '<option value="' + projsWithLogs[j] + '">' + projsWithLogs[j] + '</option>';
-    sumProj.innerHTML = opts;
-  }
-
-  // Populate planner dropdown
+  if (sumProj) { var opts='<option value="">-- select project --</option>'; for(var j=0;j<projsWithLogs.length;j++) opts+='<option value="'+projsWithLogs[j]+'">'+projsWithLogs[j]+'</option>'; sumProj.innerHTML=opts; }
   var sumPl = document.getElementById('sum-planner');
-  if (sumPl) {
-    var plOpts = '';
-    for (var k = 0; k < planners.length; k++) plOpts += '<option>' + planners[k] + '</option>';
-    sumPl.innerHTML = plOpts;
-    if (document.getElementById('t-planner')) sumPl.value = document.getElementById('t-planner').value;
-  }
-
-  document.getElementById('sum-preview').innerHTML = '<div class="empty" style="padding:16px;">Select a project above to preview the summary.</div>';
+  if (sumPl) { var plOpts=''; for(var k=0;k<planners.length;k++) plOpts+='<option>'+planners[k]+'</option>'; sumPl.innerHTML=plOpts; if(document.getElementById('t-planner')) sumPl.value=document.getElementById('t-planner').value; }
+  document.getElementById('sum-preview').innerHTML='<div class="empty" style="padding:16px;">Select a project above to preview the summary.</div>';
 }
 
-function closeAISummaryModal() {
-  var modal = document.getElementById('ai-summary-modal');
-  if (modal) modal.style.display = 'none';
-}
+function closeAISummaryModal() { var m=document.getElementById('ai-summary-modal'); if(m) m.style.display='none'; }
 
 function renderSummaryPreview() {
   var projCase = document.getElementById('sum-proj').value;
   var planner = document.getElementById('sum-planner').value;
   var el = document.getElementById('sum-preview');
-  if (!projCase) { el.innerHTML = '<div class="empty" style="padding:16px;">Select a project above to preview the summary.</div>'; return; }
-
-  var entries = [];
-  var projName = '';
-  for (var i = 0; i < aiLogs.length; i++) {
-    if (aiLogs[i].projCase === projCase) {
-      entries.push(aiLogs[i]);
-      if (!projName) projName = aiLogs[i].projName || projCase;
-    }
+  if (!projCase) { el.innerHTML='<div class="empty" style="padding:16px;">Select a project above to preview the summary.</div>'; return; }
+  var entries=[], projName='';
+  for (var i=0; i<aiLogs.length; i++) { if(aiLogs[i].projCase===projCase){entries.push(aiLogs[i]);if(!projName)projName=aiLogs[i].projName||projCase;} }
+  entries.sort(function(a,b){return new Date(a.date)-new Date(b.date);});
+  if (!entries.length) { el.innerHTML='<div class="empty" style="padding:16px;">No AI log entries found for '+projCase+'.</div>'; return; }
+  var today=new Date(), todayStr=(today.getMonth()+1)+'/'+today.getDate()+'/'+today.getFullYear();
+  var tierColors={'Tier 1 - Public':'#d1fae5|#065f46','Tier 2 - Internal Use':'#dbeafe|#1e40af','Tier 3 - Confidential (redacted)':'#fef3c7|#92400e'};
+  var rows='';
+  for (var j=0; j<entries.length; j++) {
+    var e=entries[j], tc=tierColors[e.tier]?tierColors[e.tier].split('|'):['#f4f5f7','#666'];
+    var tierCell=e.tier?'<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:'+tc[0]+';color:'+tc[1]+';font-weight:600;">'+e.tier.replace('Tier 1 - Public','T1').replace('Tier 2 - Internal Use','T2').replace('Tier 3 - Confidential (redacted)','T3 (redacted)')+'</span>':'--';
+    rows+='<tr><td style="padding:7px 8px 7px 0;border-bottom:1px solid #f0f0f0;font-size:11px;">'+fmtDate(e.date)+'</td><td style="padding:7px 8px 7px 0;border-bottom:1px solid #f0f0f0;font-size:11px;">'+e.tool+'</td><td style="padding:7px 8px 7px 0;border-bottom:1px solid #f0f0f0;font-size:11px;">'+e.task+(e.notes?'<div style="font-size:10px;color:#999;margin-top:2px;">'+e.notes+'</div>':'')+'</td><td style="padding:7px 8px 7px 0;border-bottom:1px solid #f0f0f0;">'+tierCell+'</td><td style="padding:7px 0 7px 0;border-bottom:1px solid #f0f0f0;font-size:11px;color:#666;">'+e.review+'</td></tr>';
   }
-  entries.sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
-
-  if (!entries.length) { el.innerHTML = '<div class="empty" style="padding:16px;">No AI log entries found for ' + projCase + '.</div>'; return; }
-
-  var today = new Date();
-  var todayStr = (today.getMonth()+1)+'/'+today.getDate()+'/'+today.getFullYear();
-
-  var tierColors = {'Tier 1 - Public':'#d1fae5|#065f46', 'Tier 2 - Internal Use':'#dbeafe|#1e40af', 'Tier 3 - Confidential (redacted)':'#fef3c7|#92400e'};
-
-  var rows = '';
-  for (var j = 0; j < entries.length; j++) {
-    var e = entries[j];
-    var tc = tierColors[e.tier] ? tierColors[e.tier].split('|') : ['#f4f5f7','#666'];
-    var tierCell = e.tier ? '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:'+tc[0]+';color:'+tc[1]+';font-weight:600;">'+e.tier.replace('Tier 1 - Public','T1').replace('Tier 2 - Internal Use','T2').replace('Tier 3 - Confidential (redacted)','T3 (redacted)')+'</span>' : '--';
-    rows += '<tr>'
-      + '<td style="padding:7px 8px 7px 0;border-bottom:1px solid #f0f0f0;font-size:11px;">' + fmtDate(e.date) + '</td>'
-      + '<td style="padding:7px 8px 7px 0;border-bottom:1px solid #f0f0f0;font-size:11px;">' + e.tool + '</td>'
-      + '<td style="padding:7px 8px 7px 0;border-bottom:1px solid #f0f0f0;font-size:11px;">' + e.task + (e.notes ? '<div style="font-size:10px;color:#999;margin-top:2px;">'+e.notes+'</div>' : '') + '</td>'
-      + '<td style="padding:7px 8px 7px 0;border-bottom:1px solid #f0f0f0;">' + tierCell + '</td>'
-      + '<td style="padding:7px 0 7px 0;border-bottom:1px solid #f0f0f0;font-size:11px;color:#666;">' + e.review + '</td>'
-      + '</tr>';
-  }
-
-  var tierCounts = {t1:0, t2:0, t3:0};
-  for (var k = 0; k < entries.length; k++) {
-    if (entries[k].tier === 'Tier 1 - Public') tierCounts.t1++;
-    else if (entries[k].tier === 'Tier 2 - Internal Use') tierCounts.t2++;
-    else if (entries[k].tier === 'Tier 3 - Confidential (redacted)') tierCounts.t3++;
-  }
-  var tierSummary = [];
-  if (tierCounts.t1) tierSummary.push(tierCounts.t1 + ' Tier 1 (public)');
-  if (tierCounts.t2) tierSummary.push(tierCounts.t2 + ' Tier 2 (internal use)');
-  if (tierCounts.t3) tierSummary.push(tierCounts.t3 + ' Tier 3 (confidential, redacted before upload)');
-
-  el.innerHTML = '<div id="summary-printable" style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Arial,sans-serif;font-size:12px;">'
-    // Header
-    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:1px solid #e0e0e0;margin-bottom:14px;">'
-    + '<div><div style="font-size:13px;font-weight:600;">City of San Jacinto — Planning Division</div><div style="font-size:11px;color:#666;margin-top:2px;">Planning Division</div></div>'
-    + '<div style="text-align:right;"><div style="font-size:13px;font-weight:600;">AI Use Summary</div><div style="font-size:11px;color:#666;margin-top:2px;">Retain with project file</div></div>'
-    + '</div>'
-    // Case meta
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;background:#f8f9fa;border-radius:8px;padding:12px 14px;margin-bottom:14px;">'
-    + '<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Case number</div><div style="font-size:13px;font-weight:600;margin-top:2px;">' + projCase + '</div></div>'
-    + '<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Project name</div><div style="font-size:13px;font-weight:600;margin-top:2px;">' + projName + '</div></div>'
-    + '<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Planner of record</div><div style="font-size:13px;font-weight:600;margin-top:2px;">' + planner + '</div></div>'
-    + '<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Report generated</div><div style="font-size:13px;font-weight:600;margin-top:2px;">' + todayStr + '</div></div>'
-    + '<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Total AI sessions</div><div style="font-size:13px;font-weight:600;margin-top:2px;">' + entries.length + '</div></div>'
-    + '<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Data tiers used</div><div style="font-size:12px;font-weight:500;margin-top:2px;">' + (tierSummary.join('; ') || '--') + '</div></div>'
-    + '</div>'
-    // Log table
-    + '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#999;margin-bottom:8px;">AI-assisted tasks</div>'
-    + '<table style="width:100%;border-collapse:collapse;">'
-    + '<thead><tr>'
-    + '<th style="text-align:left;font-size:10px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.05em;padding:0 8px 8px 0;border-bottom:1px solid #e0e0e0;">Date</th>'
-    + '<th style="text-align:left;font-size:10px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.05em;padding:0 8px 8px 0;border-bottom:1px solid #e0e0e0;">Tool</th>'
-    + '<th style="text-align:left;font-size:10px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.05em;padding:0 8px 8px 0;border-bottom:1px solid #e0e0e0;">Task &amp; notes</th>'
-    + '<th style="text-align:left;font-size:10px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.05em;padding:0 8px 8px 0;border-bottom:1px solid #e0e0e0;">Tier</th>'
-    + '<th style="text-align:left;font-size:10px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.05em;padding:0 0 8px 0;border-bottom:1px solid #e0e0e0;">Review</th>'
-    + '</tr></thead><tbody>' + rows + '</tbody></table>'
-    // Attestation
-    + '<div style="margin-top:16px;padding-top:12px;border-top:1px solid #e0e0e0;">'
-    + '<div style="font-size:11px;color:#666;line-height:1.6;margin-bottom:14px;">I attest that all AI-assisted work product reflected in this log was reviewed and revised by me prior to inclusion in official planning documents. AI tools were used as drafting and research aids only. All discretionary findings, CEQA determinations, and approval conditions reflect my independent professional judgment.</div>'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">'
-    + '<div><div style="border-bottom:1px solid #888;height:24px;margin-bottom:3px;"></div><div style="font-size:10px;color:#999;">Planner of record</div></div>'
-    + '<div><div style="border-bottom:1px solid #888;height:24px;margin-bottom:3px;"></div><div style="font-size:10px;color:#999;">Title</div></div>'
-    + '<div><div style="border-bottom:1px solid #888;height:24px;margin-bottom:3px;"></div><div style="font-size:10px;color:#999;">Date</div></div>'
-    + '</div></div>'
-    // Policy note
-    + '<div style="margin-top:12px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:10px;color:#aaa;line-height:1.6;">This record was generated in accordance with the City of San Jacinto Planning Division AI Acceptable Use procedure. Retain with the project file. Subject to disclosure under CPRA (Gov. Code §7920 et seq.).</div>'
-    + '</div>';
+  var tc2={t1:0,t2:0,t3:0};
+  for(var k=0;k<entries.length;k++){if(entries[k].tier==='Tier 1 - Public')tc2.t1++;else if(entries[k].tier==='Tier 2 - Internal Use')tc2.t2++;else if(entries[k].tier==='Tier 3 - Confidential (redacted)')tc2.t3++;}
+  var ts=[];if(tc2.t1)ts.push(tc2.t1+' Tier 1 (public)');if(tc2.t2)ts.push(tc2.t2+' Tier 2 (internal use)');if(tc2.t3)ts.push(tc2.t3+' Tier 3 (confidential, redacted before upload)');
+  el.innerHTML='<div id="summary-printable" style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Arial,sans-serif;font-size:12px;">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:1px solid #e0e0e0;margin-bottom:14px;"><div><div style="font-size:13px;font-weight:600;">City of San Jacinto \u2014 Planning Division</div></div><div style="text-align:right;"><div style="font-size:13px;font-weight:600;">AI Use Summary</div><div style="font-size:11px;color:#666;margin-top:2px;">Retain with project file</div></div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;background:#f8f9fa;border-radius:8px;padding:12px 14px;margin-bottom:14px;">'
+    +'<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Case number</div><div style="font-size:13px;font-weight:600;margin-top:2px;">'+projCase+'</div></div>'
+    +'<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Project name</div><div style="font-size:13px;font-weight:600;margin-top:2px;">'+projName+'</div></div>'
+    +'<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Planner of record</div><div style="font-size:13px;font-weight:600;margin-top:2px;">'+planner+'</div></div>'
+    +'<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Report generated</div><div style="font-size:13px;font-weight:600;margin-top:2px;">'+todayStr+'</div></div>'
+    +'<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Total AI sessions</div><div style="font-size:13px;font-weight:600;margin-top:2px;">'+entries.length+'</div></div>'
+    +'<div><div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.06em;">Data tiers used</div><div style="font-size:12px;font-weight:500;margin-top:2px;">'+(ts.join('; ')||'--')+'</div></div>'
+    +'</div>'
+    +'<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#999;margin-bottom:8px;">AI-assisted tasks</div>'
+    +'<table style="width:100%;border-collapse:collapse;"><thead><tr>'
+    +'<th style="text-align:left;font-size:10px;font-weight:600;color:#999;text-transform:uppercase;padding:0 8px 8px 0;border-bottom:1px solid #e0e0e0;">Date</th>'
+    +'<th style="text-align:left;font-size:10px;font-weight:600;color:#999;text-transform:uppercase;padding:0 8px 8px 0;border-bottom:1px solid #e0e0e0;">Tool</th>'
+    +'<th style="text-align:left;font-size:10px;font-weight:600;color:#999;text-transform:uppercase;padding:0 8px 8px 0;border-bottom:1px solid #e0e0e0;">Task &amp; notes</th>'
+    +'<th style="text-align:left;font-size:10px;font-weight:600;color:#999;text-transform:uppercase;padding:0 8px 8px 0;border-bottom:1px solid #e0e0e0;">Tier</th>'
+    +'<th style="text-align:left;font-size:10px;font-weight:600;color:#999;text-transform:uppercase;padding:0 0 8px 0;border-bottom:1px solid #e0e0e0;">Review</th>'
+    +'</tr></thead><tbody>'+rows+'</tbody></table>'
+    +'<div style="margin-top:16px;padding-top:12px;border-top:1px solid #e0e0e0;">'
+    +'<div style="font-size:11px;color:#666;line-height:1.6;margin-bottom:14px;">I attest that all AI-assisted work product reflected in this log was reviewed and revised by me prior to inclusion in official planning documents. AI tools were used as drafting and research aids only. All discretionary findings, CEQA determinations, and approval conditions reflect my independent professional judgment.</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;"><div><div style="border-bottom:1px solid #888;height:24px;margin-bottom:3px;"></div><div style="font-size:10px;color:#999;">Planner of record</div></div><div><div style="border-bottom:1px solid #888;height:24px;margin-bottom:3px;"></div><div style="font-size:10px;color:#999;">Title</div></div><div><div style="border-bottom:1px solid #888;height:24px;margin-bottom:3px;"></div><div style="font-size:10px;color:#999;">Date</div></div></div></div>'
+    +'<div style="margin-top:12px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:10px;color:#aaa;line-height:1.6;">This record was generated in accordance with the City of San Jacinto Planning Division AI Acceptable Use procedure. Retain with the project file. Subject to disclosure under CPRA (Gov. Code \u00a77920 et seq.).</div>'
+    +'</div>';
 }
 
 function copySummary() {
-  var el = document.getElementById('summary-printable');
-  if (!el) { alert('Generate a summary first.'); return; }
-  var projCase = document.getElementById('sum-proj').value;
-  var planner = document.getElementById('sum-planner').value;
-  if (!projCase) { alert('Select a project first.'); return; }
-
-  var entries = [];
-  for (var i = 0; i < aiLogs.length; i++) { if (aiLogs[i].projCase === projCase) entries.push(aiLogs[i]); }
-  entries.sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
-
-  var today = new Date();
-  var todayStr = (today.getMonth()+1)+'/'+today.getDate()+'/'+today.getFullYear();
-  var text = 'AI USE SUMMARY\nCity of San Jacinto — Planning Division\n';
-  text += '--------------------------------------------\n';
-  text += 'Case: ' + projCase + '\n';
-  text += 'Planner of record: ' + planner + '\n';
-  text += 'Report generated: ' + todayStr + '\n';
-  text += 'Total AI sessions: ' + entries.length + '\n\n';
-  text += 'AI-ASSISTED TASKS\n';
-  for (var j = 0; j < entries.length; j++) {
-    var e = entries[j];
-    text += '\n' + fmtDate(e.date) + ' | ' + e.tool + '\n';
-    text += 'Task: ' + e.task + '\n';
-    if (e.tier) text += 'Data tier: ' + e.tier + '\n';
-    text += 'Review: ' + e.review + '\n';
-    if (e.notes) text += 'Notes: ' + e.notes + '\n';
-  }
-  text += '\nATTESTATION\nI attest that all AI-assisted work product reflected in this log was reviewed and revised by me prior to inclusion in official planning documents. AI tools were used as drafting and research aids only.\n\nSignature: ________________  Title: ________________  Date: ________________\n';
-  text += '\nRetain with project file. Subject to CPRA disclosure (Gov. Code §7920 et seq.).';
-
-  navigator.clipboard.writeText(text).then(function() {
-    var btn = document.getElementById('sum-copy-btn');
-    if (btn) { btn.textContent = 'Copied!'; setTimeout(function(){ btn.textContent = 'Copy summary'; }, 2000); }
-  }).catch(function(){ alert('Copy failed — try the Print option instead.'); });
+  var projCase=document.getElementById('sum-proj').value, planner=document.getElementById('sum-planner').value;
+  if(!projCase){alert('Select a project first.');return;}
+  var entries=[];
+  for(var i=0;i<aiLogs.length;i++){if(aiLogs[i].projCase===projCase)entries.push(aiLogs[i]);}
+  entries.sort(function(a,b){return new Date(a.date)-new Date(b.date);});
+  var today=new Date(), todayStr=(today.getMonth()+1)+'/'+today.getDate()+'/'+today.getFullYear();
+  var text='AI USE SUMMARY\nCity of San Jacinto \u2014 Planning Division\n--------------------------------------------\n';
+  text+='Case: '+projCase+'\nPlanner of record: '+planner+'\nReport generated: '+todayStr+'\nTotal AI sessions: '+entries.length+'\n\nAI-ASSISTED TASKS\n';
+  for(var j=0;j<entries.length;j++){var e=entries[j];text+='\n'+fmtDate(e.date)+' | '+e.tool+'\nTask: '+e.task+'\n';if(e.tier)text+='Data tier: '+e.tier+'\n';text+='Review: '+e.review+'\n';if(e.notes)text+='Notes: '+e.notes+'\n';}
+  text+='\nATTESTATION\nI attest that all AI-assisted work product reflected in this log was reviewed and revised by me prior to inclusion in official planning documents.\n\nSignature: ________________  Title: ________________  Date: ________________\n\nRetain with project file. Subject to CPRA disclosure (Gov. Code \u00a77920 et seq.).';
+  navigator.clipboard.writeText(text).then(function(){var btn=document.getElementById('sum-copy-btn');if(btn){btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy summary';},2000);}}).catch(function(){alert('Copy failed \u2014 try the Print option instead.');});
 }
 
 function printSummary() {
-  var el = document.getElementById('summary-printable');
-  if (!el) { alert('Generate a summary first.'); return; }
-  var projCase = document.getElementById('sum-proj').value;
-  if (!projCase) { alert('Select a project first.'); return; }
-  var w = window.open('', '_blank', 'width=780,height=900');
-  w.document.write('<!DOCTYPE html><html><head><title>AI Use Summary — ' + projCase + '</title>');
-  w.document.write('<style>body{font-family:Arial,sans-serif;font-size:12px;margin:0.5in;color:#111;}@media print{body{margin:0.4in;}}</style>');
-  w.document.write('</head><body>' + el.innerHTML + '</body></html>');
-  w.document.close();
-  w.focus();
-  setTimeout(function(){ w.print(); }, 400);
+  var el=document.getElementById('summary-printable'); if(!el){alert('Generate a summary first.');return;}
+  var projCase=document.getElementById('sum-proj').value; if(!projCase){alert('Select a project first.');return;}
+  var w=window.open('','_blank','width=780,height=900');
+  w.document.write('<!DOCTYPE html><html><head><title>AI Use Summary \u2014 '+projCase+'</title><style>body{font-family:Arial,sans-serif;font-size:12px;margin:0.5in;color:#111;}@media print{body{margin:0.4in;}}</style></head><body>'+el.innerHTML+'</body></html>');
+  w.document.close(); w.focus(); setTimeout(function(){w.print();},400);
+}
+
+// ── Prompt Library ─────────────────────────────────────────────
+var plExpanded = false;
+var plFilter = 'all';
+
+var plCategories = [
+  {key:'completeness',label:'Completeness review'},
+  {key:'ceqa',label:'CEQA & technical reports'},
+  {key:'coa',label:'COA & staff report'},
+  {key:'comms',label:'Communications'},
+  {key:'preapp',label:'Pre-application'},
+  {key:'noticing',label:'Noticing & neighbor notification'},
+  {key:'hearing',label:'Hearing preparation'},
+  {key:'general',label:'General use'}
+];
+
+var plPrompts = [
+  {id:'c1',cat:'completeness',icon:'&#128196;',title:'Extract project description from application package',tier:'T2',note:'Upload the application package PDF directly into Copilot. Extracts a clean project description you can paste into your completeness letter generator.',text:'I am uploading a planning permit application package for the City of San Jacinto Planning Division. Please extract and summarize the following information only:\n\n1. Project description: what is being proposed (use type, building type, scope)\n2. Project address and APN\n3. Applicant name \u2014 use \u201cthe applicant\u201d if not clearly stated on the cover sheet\n4. Proposed square footage, units, or other key metrics\n5. Zoning designation if stated\n\nDo not include any personal contact information (phone numbers, email addresses, signatures). Format the output as a structured list. Flag any fields where the information was unclear or missing from the submitted materials.'},
+  {id:'c2',cat:'completeness',icon:'&#9989;',title:'Flag missing submittal items',tier:'T2',note:'Use after uploading the application package. Describe the application type so Copilot knows what to check against.',text:'I am uploading a planning permit application for a [APPLICATION TYPE \u2014 e.g. Conditional Use Permit / ADR / Tentative Tract Map] in San Jacinto, California.\n\nReview the uploaded materials and identify:\n1. What documents or exhibits appear to be present\n2. What items appear to be missing or incomplete based on a standard submittal for this application type\n3. Any inconsistencies between the project description and the submitted plans\n\nFormat your response as two lists: \u201cItems present\u201d and \u201cPotentially missing or incomplete items.\u201d Do not include applicant personal contact information in your response.'},
+  {id:'c3',cat:'completeness',icon:'&#128221;',title:'Summarize resubmittal for comparison',tier:'T2',note:'Upload the resubmittal package. Quickly identifies what changed between the original submittal and the revision.',text:'I am uploading a resubmittal package for a planning application. Please summarize:\n\n1. What changes or additions appear to have been made compared to a typical first submittal\n2. Any new exhibits or revised sheets included\n3. Whether the resubmittal appears to address standard completeness comments\n\nKeep the summary concise \u2014 one paragraph per item. Do not include applicant contact information. Flag anything that appears unusual or may still be incomplete.'},
+  {id:'ceqa1',cat:'ceqa',icon:'&#127807;',title:'Extract bio report methodology and findings \u2014 no location data',tier:'T3',note:'Remove GPS coordinates, UTM locations, CNDDB element numbers, and CA site numbers BEFORE uploading.',text:'I am uploading a biological resource assessment for a planning project in San Jacinto, California. This document has been pre-reviewed and sensitive species occurrence location data has been removed.\n\nPlease extract and summarize:\n1. Survey methodology (dates, methods, qualified biologist credentials)\n2. Habitat types present on the project site described in general terms\n3. Species observed or detected \u2014 list common name and whether listed/sensitive, but do not include any GPS or location-specific data\n4. Significance findings: which resources were found to be significant and which were not\n5. Recommended mitigation measures\n\nDo not reproduce any coordinates, transect maps, or location-specific occurrence data even if present in the document. Format as a structured summary suitable for use in a CEQA Initial Study checklist.'},
+  {id:'ceqa2',cat:'ceqa',icon:'&#127981;',title:'Extract cultural resource report findings \u2014 no site data',tier:'T3',note:'Remove CA site numbers, GPS coordinates, and site descriptions BEFORE uploading.',text:'I am uploading a cultural resources assessment (Phase I Archaeological Survey Report) for a planning project in San Jacinto, California. Sensitive site location information has been removed from this copy prior to upload.\n\nPlease extract and summarize:\n1. Survey methodology and area of potential effect (APE) described at the parcel level only\n2. Types of resources identified in general terms \u2014 do not include site record numbers or location descriptions\n3. Significance findings under CEQA and NHPA\n4. Recommended mitigation measures or further study\n5. Whether tribal consultation was recommended or completed (general statement only)\n\nDo not reproduce any site record numbers (CA-RIV-XXXX format), GPS coordinates, or location descriptions. Format as a structured summary for use in a CEQA Initial Study.'},
+  {id:'ceqa3',cat:'ceqa',icon:'&#128664;',title:'Summarize traffic, noise, or air quality appendix',tier:'T2',note:'Most traffic, noise, air quality, and GHG appendices are Tier 2. Upload directly.',text:'I am uploading a [REPORT TYPE \u2014 e.g. traffic impact analysis / noise assessment / air quality study / GHG analysis] prepared for a planning project in San Jacinto, California.\n\nPlease summarize:\n1. Study methodology and significance thresholds used\n2. Existing conditions baseline\n3. Project-related impacts identified as significant\n4. Project-related impacts found to be less than significant\n5. Mitigation measures recommended\n6. Residual impacts after mitigation\n\nFormat as a concise structured summary suitable for inclusion in a CEQA Initial Study checklist response. Flag any findings that appear unusual or that may require additional planner review.'},
+  {id:'ceqa4',cat:'ceqa',icon:'&#128203;',title:'Extract mitigation measures from IS/MND',tier:'T2',note:'Upload the IS/MND. Useful for building the mitigation monitoring and reporting program (MMRP).',text:'I am uploading an Initial Study / Mitigated Negative Declaration for a planning project in San Jacinto, California.\n\nPlease extract all mitigation measures from the document and format them as a numbered list with the following structure for each:\n- Mitigation measure number and CEQA topic area (e.g. BIO-1, CUL-1, NOI-1)\n- Full mitigation measure text\n- Responsible party if stated\n- Timing or phase if stated\n\nDo not summarize or paraphrase the mitigation measures \u2014 extract them verbatim. Flag any measures that appear to be missing a responsible party or timing requirement.'},
+  {id:'coa1',cat:'coa',icon:'&#128196;',title:'Check COA consistency with project description',tier:'T2',note:'Upload your draft COA or paste into chat. Use after your COA Builder output to catch inconsistencies before finalizing.',text:'I am sharing a draft conditions of approval for a [APPLICATION TYPE] in San Jacinto, California. The project is described as: [PASTE 2-3 SENTENCE PROJECT DESCRIPTION HERE \u2014 no applicant names or addresses].\n\nPlease review the conditions and identify:\n1. Any conditions that appear inconsistent with the project description above\n2. Any conditions that reference a project feature not mentioned in the description\n3. Any conditions that appear to be missing for this project type\n4. Any conditions with blank fields or placeholder text that need to be completed\n\nDo not rewrite or replace any conditions. Flag issues only, with a brief explanation for each flag.'},
+  {id:'coa2',cat:'coa',icon:'&#9998;',title:'Polish staff report section language',tier:'T2',note:'Paste a specific staff report section into chat. Keeps all content within M365 enterprise protection.',text:'I am sharing a draft section of a planning staff report for the City of San Jacinto Planning Division. Please refine the language for clarity, professional tone, and consistency with a formal public hearing document. The section is:\n\n[PASTE STAFF REPORT SECTION HERE]\n\nSpecific guidance:\n- Maintain formal third-person government agency voice\n- Do not change any factual content, findings, or conclusions\n- Do not add new information or analysis\n- Flag any sentences that are ambiguous or that may require planner verification\n- Keep any SJMC code citations exactly as written\n\nReturn the revised section with a brief note on what was changed and why.'},
+  {id:'coa3',cat:'coa',icon:'&#128269;',title:'Check internal consistency across staff report sections',tier:'T2',note:'Upload the full draft staff report via the Word panel. Useful before finalizing.',text:'I am uploading a draft planning staff report for the City of San Jacinto Planning Division.\n\nPlease review the document for internal consistency and flag:\n1. Any discrepancies in how the project is described across different sections\n2. Any inconsistencies between the project description and the proposed conditions of approval\n3. Any references to exhibits or section numbers that appear incorrect or missing\n4. Any findings language that appears inconsistent with the analysis in the body of the report\n\nDo not rewrite any section. Flag issues only with a reference to the location in the document and a brief description of the inconsistency.'},
+  {id:'comm1',cat:'comms',icon:'&#128140;',title:'Summarize applicant email thread',tier:'T2',note:'Copy and paste the email thread into Copilot chat. Replace applicant name with "the applicant" before pasting.',text:'I am pasting an email thread related to a planning case in San Jacinto, California. Applicant names have been replaced with \u201cthe applicant.\u201d\n\nPlease summarize:\n1. Key issues or questions raised by the applicant\n2. Responses or commitments made by city staff\n3. Any outstanding items that have not been resolved\n4. Any deadlines or action items mentioned\n\nFormat as a brief bullet-point summary. Flag any commitments made by staff that may need follow-up before the case hearing.\n\n[PASTE EMAIL THREAD HERE]'},
+  {id:'comm2',cat:'comms',icon:'&#128101;',title:'Summarize agency referral responses',tier:'T2',note:'Paste in multiple agency comment letters or referral responses.',text:'I am pasting agency referral responses received for a planning case in San Jacinto, California.\n\nPlease organize the responses by agency and summarize for each:\n1. Key requirements or conditions requested\n2. Any objections or concerns raised\n3. Whether the agency indicated approval, approval with conditions, or no response\n\nThen provide a consolidated list of all conditions and requirements across all agencies, grouped by topic. Flag any conflicting requirements between agencies.\n\n[PASTE AGENCY RESPONSES HERE]'},
+  {id:'comm3',cat:'comms',icon:'&#128172;',title:'Categorize public comments',tier:'T2',note:'Paste public comment letters. Remove commenter names and addresses before pasting.',text:'I am pasting public comments received for a planning case in San Jacinto, California. Commenter names and addresses have been removed.\n\nPlease:\n1. Categorize comments by topic (e.g. traffic, noise, parking, aesthetics, compatibility, CEQA, procedural)\n2. Identify the most frequently raised concerns\n3. Identify any comments that raise a new CEQA issue not addressed in the project\u2019s environmental document\n4. Identify any comments that raise a legal or procedural challenge\n\nDo not draft responses. Summarize and categorize only. Flag any comment that appears to require city attorney review.\n\n[PASTE PUBLIC COMMENTS HERE]'},
+  {id:'pre1',cat:'preapp',icon:'&#128205;',title:'Summarize pre-application meeting notes',tier:'T2',note:'Paste your pre-application meeting notes. Produces a clean summary for the case record.',text:'I am sharing notes from a pre-application meeting for a proposed project in San Jacinto, California. Applicant names have been replaced with \u201cthe applicant.\u201d\n\nPlease organize the notes into a structured summary covering:\n1. Project description as discussed at the meeting\n2. Key planning issues identified (zoning, use, design, CEQA triggers)\n3. Staff feedback and direction provided\n4. Required studies or reports identified\n5. Recommended next steps for the applicant\n6. Any items flagged for follow-up by city staff\n\nFormat as a professional meeting summary suitable for filing with the case record. Do not include personal contact information.\n\n[PASTE MEETING NOTES HERE]'},
+  {id:'pre2',cat:'preapp',icon:'&#127963;',title:'Identify potential project issues from description',tier:'T2',note:'Use before or after a pre-app meeting. Paste in a brief project description \u2014 no applicant names needed.',text:'I am a planner at the City of San Jacinto Planning Division reviewing a proposed project description. Please analyze the description below and identify potential planning and CEQA issues that should be discussed at a pre-application meeting.\n\nProject description: [PASTE PROJECT DESCRIPTION HERE \u2014 no applicant names or addresses]\n\nPlease identify:\n1. Likely application types required under standard California planning practice\n2. Potential zoning or land use compatibility issues\n3. CEQA checklist areas most likely to require analysis\n4. Studies or technical reports likely to be required\n5. Any issues that may require early coordination with other departments or agencies\n\nNote: I will independently verify all findings against the San Jacinto Municipal Code and General Plan. Do not fabricate code citations.'},
+  {id:'pre3',cat:'preapp',icon:'&#128336;',title:'Draft pre-application meeting follow-up letter',tier:'T2',note:'Use after a pre-app meeting. Replace all placeholders before sending.',text:'Please draft a professional pre-application meeting follow-up letter from the City of San Jacinto Planning Division to a project applicant.\n\nMeeting details:\n- Application type discussed: [APPLICATION TYPE]\n- General project description: [2-3 SENTENCES \u2014 no names or addresses]\n- Key issues discussed: [LIST KEY ISSUES FROM MEETING]\n- Required submittals identified: [LIST REQUIRED STUDIES/REPORTS]\n- Next steps discussed: [LIST NEXT STEPS]\n\nThe letter should use formal city government language, summarize without making binding commitments, list required submittals clearly, note that final determinations will be made upon receipt of a complete application, and include a placeholder for the planner\u2019s contact information.\n\nDo not include applicant names or addresses in the draft \u2014 I will add those before sending.'},
+  {id:'not1',cat:'noticing',icon:'&#128276;',title:'Draft public hearing notice \u2014 project description paragraph',tier:'T2',note:'Drafts the project description paragraph for a public hearing notice. Planner must verify all legal requirements before issuing.',text:'Please draft the project description paragraph for a public hearing notice for the City of San Jacinto Planning Division.\n\nProject details:\n- Application type: [APPLICATION TYPE \u2014 e.g. Conditional Use Permit]\n- General project description: [2-3 SENTENCES \u2014 no applicant names]\n- Project address/general location: [GENERAL LOCATION]\n- Decision body: [Planning Commission / City Council / Director]\n\nThe paragraph should be written in plain language, describe what is being proposed and why a public hearing is required, not make findings or recommendations, and be 3-5 sentences maximum.\n\nI will verify all legal noticing requirements independently before this notice is issued.'},
+  {id:'not2',cat:'noticing',icon:'&#128231;',title:'Draft neighbor notification letter',tier:'T2',note:'Remove applicant names and addresses before uploading \u2014 use placeholders.',text:'Please draft a neighbor notification letter for a discretionary planning application in San Jacinto, California.\n\nProject details:\n- Application type: [APPLICATION TYPE]\n- General project description: [2-3 SENTENCES \u2014 no names]\n- General project location: [GENERAL LOCATION DESCRIPTION \u2014 no specific address]\n- Planner of record: [PLANNER NAME AND TITLE PLACEHOLDER]\n- Response deadline: [DATE PLACEHOLDER]\n\nThe letter should explain that a discretionary application has been filed, briefly describe the proposed project in plain language, invite written comments, explain how to submit comments, and use professional city government tone.\n\nDo not include applicant names, contact information, or specific property addresses in the draft.'},
+  {id:'not3',cat:'noticing',icon:'&#128203;',title:'Categorize public comment letters for response',tier:'T2',note:'Use after the comment period closes. Remove commenter names and addresses before pasting.',text:'I am pasting written public comments received during the comment period for a planning application in San Jacinto, California. Commenter names and addresses have been removed.\n\nFor each comment, please:\n1. Assign a comment number\n2. Identify the topic or issue raised\n3. Summarize the concern in one sentence\n4. Flag whether the comment raises a CEQA issue, a legal or procedural issue, or a general planning concern\n\nThen provide a consolidated summary table with columns: Comment #, Topic, One-sentence summary, Issue type.\n\nDo not draft responses. Flag any comment that appears to require city attorney review.\n\n[PASTE PUBLIC COMMENTS HERE]'},
+  {id:'hear1',cat:'hearing',icon:'&#127908;',title:'Build hearing preparation briefing from case file',tier:'T2',note:'Upload your draft staff report or paste a case summary. Produces a concise pre-hearing briefing.',text:'I am sharing materials for a planning case scheduled for public hearing before the [Planning Commission / City Council] of the City of San Jacinto, California.\n\nPlease prepare a concise hearing preparation briefing covering:\n1. Project description \u2014 one paragraph summary\n2. Key planning issues and how the staff report addresses them\n3. Recommended conditions that may draw commissioner or council questions\n4. Any outstanding issues, unresolved objections, or items flagged in public comments\n5. CEQA determination and basis\n6. Recommended action\n\nFormat as a one-page briefing document. Do not include applicant names or contact information. Flag any item that appears to require a clear verbal response at the hearing.\n\n[PASTE STAFF REPORT SUMMARY OR CASE MATERIALS HERE]'},
+  {id:'hear2',cat:'hearing',icon:'&#10067;',title:'Anticipate likely commissioner or council questions',tier:'T2',note:'Use after your staff report is drafted. Helps prepare for likely hearing questions.',text:'I am sharing a summary of a planning case scheduled for a public hearing in San Jacinto, California. Based on the project type and issues described, please identify the questions most likely to be asked by Planning Commissioners or City Council members at the hearing.\n\nProject summary: [PASTE 3-5 SENTENCE PROJECT SUMMARY \u2014 no names]\nKey issues: [LIST KEY ISSUES \u2014 zoning, CEQA, neighbor concerns, etc.]\n\nFor each likely question:\n1. State the question as a commissioner might ask it\n2. Identify what information from the staff report would support a response\n3. Flag any question where the answer is unclear or may require additional preparation\n\nFocus on questions about CEQA findings, conditions of approval, compatibility with surrounding uses, and procedural requirements. Do not draft scripted answers \u2014 I will prepare my own responses.'},
+  {id:'hear3',cat:'hearing',icon:'&#128466;',title:'Summarize hearing outcome for case file',tier:'T2',note:'Use immediately after a hearing. Paste your notes while still fresh.',text:'I am sharing notes from a planning hearing in San Jacinto, California. Please organize these into a structured hearing outcome summary for the case file.\n\nThe summary should cover:\n1. Date, hearing body, and case number (use placeholder if not in notes)\n2. Project description \u2014 one sentence\n3. Public comments received at the hearing \u2014 summarize by position (support / oppose / neutral) without commenter names\n4. Commission or Council discussion \u2014 key issues raised\n5. Action taken (approved / denied / continued) and any modifications to conditions\n6. Vote if noted\n7. Next steps or follow-up items for staff\n\nDo not include commenter names or personal information. Format as a professional case file memo.\n\n[PASTE HEARING NOTES HERE]'},
+  {id:'gen1',cat:'general',icon:'&#9997;',title:'Set Copilot tone and output expectations',tier:'T1',note:'Paste this at the start of any Copilot session. Works as a session-level instruction since Copilot has no persistent system prompt.',text:'Before I begin my work session, please note the following preferences for all responses in this session:\n\n- I work as a planner for the City of San Jacinto Planning Division in California\n- My work involves CEQA review, discretionary permit processing, and staff report preparation under California planning law\n- Please use formal, professional language appropriate for government planning documents\n- When summarizing documents, structure output with clear section headers and bullet points\n- Always flag information that is ambiguous, missing, or that may require my independent verification\n- Do not fabricate code citations, regulatory references, or legal conclusions\n- If I ask you to review a document, identify issues and flag them \u2014 do not make final determinations on my behalf\n- Keep responses concise and action-oriented\n\nI am ready to begin.'},
+  {id:'gen2',cat:'general',icon:'&#128269;',title:'General document summary \u2014 any Tier 2 document',tier:'T2',note:'A flexible general-purpose prompt for summarizing any Tier 2 planning document.',text:'I am uploading a [DOCUMENT TYPE] related to a planning case in San Jacinto, California.\n\nPlease provide a structured summary covering:\n1. Purpose and scope of the document\n2. Key findings or conclusions\n3. Any requirements, conditions, or recommendations\n4. Any items that appear incomplete, inconsistent, or that may require follow-up\n\nKeep the summary concise and professional. Do not include applicant personal contact information in your response. Flag any technical terms or regulatory references that may require independent planner verification.'},
+  {id:'gen3',cat:'general',icon:'&#128257;',title:'Prepare sanitized output for Claude',tier:'T2',note:'Use at the end of a Copilot session to prepare a clean summary you can safely paste into Claude.',text:'Please prepare a sanitized summary of the work we have done in this session that I can use in a separate AI drafting tool.\n\nThe summary should:\n1. Include all project details, findings, and extracted content from our session\n2. Replace any applicant names with \u201cthe applicant\u201d\n3. Replace any specific street addresses with \u201cthe project site\u201d\n4. Exclude any GPS coordinates, site record numbers, or sensitive resource location data\n5. Be formatted as plain structured text I can paste directly into another tool\n\nConfirm when done that the output contains no personal identifying information or sensitive location data.'}
+];
+
+function renderPromptLibrary() {
+  renderPLFilters(); renderPLCards();
+}
+
+function renderPLFilters() {
+  var bar = document.getElementById('pl-filters'); if (!bar || bar.dataset.built) return;
+  var cats = [{key:'all',label:'All prompts'}].concat(plCategories);
+  var html = '';
+  cats.forEach(function(c) {
+    html += '<button class="btn btn-sm" id="plf-'+c.key+'" onclick="setPLFilter(\''+c.key+'\')" style="border-radius:99px;font-size:11px;padding:4px 10px;">'+c.label+'</button>';
+  });
+  bar.innerHTML = html; bar.dataset.built = '1';
+  document.getElementById('plf-all').style.background = '#f4f5f7';
+}
+
+function setPLFilter(f) {
+  plFilter = f;
+  document.querySelectorAll('[id^="plf-"]').forEach(function(b) {
+    b.style.background = (b.id==='plf-'+f)?'#f4f5f7':'';
+    b.style.fontWeight = (b.id==='plf-'+f)?'600':'';
+  });
+  renderPLCards();
+}
+
+function renderPLCards() {
+  var container = document.getElementById('pl-container'); if (!container) return;
+  var html = '', total = 0;
+  plCategories.forEach(function(cat) {
+    var list = plPrompts.filter(function(p){ return p.cat===cat.key&&(plFilter==='all'||plFilter===cat.key); });
+    if (!list.length) return;
+    total += list.length;
+    html += '<div style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#888;margin:16px 0 8px;">'+cat.label+' <span style="font-weight:400;">('+list.length+')</span></div>';
+    list.forEach(function(p) {
+      var tierBg=p.tier==='T1'?'#EAF3DE':p.tier==='T2'?'#E6F1FB':'#FAEEDA';
+      var tierColor=p.tier==='T1'?'#3B6D11':p.tier==='T2'?'#185FA5':'#854F0B';
+      var tierLabel=p.tier==='T1'?'Tier 1':p.tier==='T2'?'Tier 2':'Tier 3';
+      html += '<div class="card" style="margin-bottom:8px;padding:0;overflow:hidden;">'
+        +'<div onclick="plToggleCard(\''+p.id+'\')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;gap:12px;">'
+        +'<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">'
+        +'<span style="font-size:15px;">'+p.icon+'</span>'
+        +'<span style="font-size:13px;font-weight:500;color:#1a1a1a;">'+p.title+'</span>'
+        +'</div>'
+        +'<span style="font-size:11px;padding:2px 8px;border-radius:99px;font-weight:500;background:'+tierBg+';color:'+tierColor+';flex-shrink:0;">'+tierLabel+'</span>'
+        +'<span id="plchev-'+p.id+'" style="font-size:12px;color:#888;flex-shrink:0;">&#9660;</span>'
+        +'</div>'
+        +'<div id="plbody-'+p.id+'" style="display:none;padding:0 14px 14px;border-top:1px solid #f0f0f0;">'
+        +'<p style="font-size:12px;color:#888;margin:10px 0 8px;line-height:1.5;">'+p.note+'</p>'
+        +'<div style="background:#f8f9fa;border:0.5px solid #e0e0e0;border-radius:8px;padding:12px 14px;font-size:12px;font-family:monospace;color:#1a1a1a;line-height:1.65;white-space:pre-wrap;word-break:break-word;">'+plEscapeHtml(p.text)+'</div>'
+        +'<div style="display:flex;justify-content:flex-end;margin-top:8px;">'
+        +'<button class="btn btn-sm" id="plcopy-'+p.id+'" onclick="plCopy(\''+p.id+'\')">Copy prompt</button>'
+        +'</div></div></div>';
+    });
+  });
+  container.innerHTML = html;
+  var countEl = document.getElementById('pl-count');
+  if (countEl) countEl.textContent = total+' prompt'+(total!==1?'s':'');
+  if (plExpanded) { plPrompts.forEach(function(p){ var b=document.getElementById('plbody-'+p.id); if(b) b.style.display='block'; }); }
+}
+
+function plEscapeHtml(text) {
+  return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\[([^\]]+)\]/g,'<em style="background:#FAEEDA;color:#854F0B;border-radius:3px;padding:0 3px;font-style:normal;">[$1]</em>');
+}
+
+function plToggleCard(id) {
+  var body=document.getElementById('plbody-'+id), chev=document.getElementById('plchev-'+id);
+  if (!body) return;
+  var open=body.style.display!=='none';
+  body.style.display=open?'none':'block';
+  if (chev) chev.innerHTML=open?'&#9660;':'&#9650;';
+}
+
+function plToggleAll() {
+  plExpanded = !plExpanded;
+  plPrompts.forEach(function(p){
+    var body=document.getElementById('plbody-'+p.id), chev=document.getElementById('plchev-'+p.id);
+    if(body) body.style.display=plExpanded?'block':'none';
+    if(chev) chev.innerHTML=plExpanded?'&#9650;':'&#9660;';
+  });
+  var label=document.getElementById('pl-expand-label');
+  if(label) label.textContent=plExpanded?'Collapse all':'Expand all';
+}
+
+function plCopy(id) {
+  var p=plPrompts.filter(function(x){return x.id===id;})[0]; if(!p) return;
+  navigator.clipboard.writeText(p.text).then(function(){
+    var btn=document.getElementById('plcopy-'+id);
+    if(btn){btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy prompt';},2000);}
+  }).catch(function(){alert('Copy failed \u2014 select and copy the text manually.');});
 }
 
 // ── Navigation ────────────────────────────────────────────────
 function showTab(t){
-  var tabs=['tracker','manual','log','report','projects','ailog'];
+  var tabs=['tracker','manual','log','report','projects','ailog','prompts'];
   for(var i=0;i<tabs.length;i++) document.getElementById('tab-'+tabs[i]).style.display=(tabs[i]===t?'':'none');
   var btns=document.querySelectorAll('.tab');
   for(var j=0;j<btns.length;j++) btns[j].classList.toggle('active',tabs[j]===t);
@@ -2271,6 +2286,7 @@ function showTab(t){
   if(t==='tracker'){updMetrics();buildProjOptCache();filterProjDropdown();}
   if(t==='manual'){buildProjOptCache();rDrop();renderManR();}
   if(t==='ailog'){buildProjOptCache();filterAILogProjDropdown();renderAILog();}
+  if(t==='prompts'){renderPromptLibrary();}
 }
 function showSub(id){
   var subs=['rpt-s','rpt-w'];

@@ -914,6 +914,8 @@ function f$(n){return '$'+Math.max(0,n).toLocaleString('en-US',{minimumFractionD
 function f$I(n){return '$'+Math.max(0,n).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});}
 function fHrs(secs){return (secs/3600).toFixed(1)+' hrs';}
 function tod(){return new Date().toLocaleDateString('en-US');}
+// The deposit/history/edit boxes sit below the whole projects table; bring the one just opened into view
+function showPanel(id){var el=document.getElementById(id);el.style.display='block';el.scrollIntoView({behavior:'smooth',block:'center'});}
 // YYYY-MM-DD in local time (for <input type=date>); toISOString() would give the UTC date
 function localISO(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 // Any stored date (M/D/YYYY, YYYY-MM-DD, ISO timestamp from Sheets) -> YYYY-MM-DD, or '' if unreadable
@@ -1544,7 +1546,7 @@ function addPlan(){
 
 function togParent(){}
 
-function openDep(i){depIdx=i;document.getElementById('hist-panel').style.display='none';document.getElementById('dep-edit-modal').style.display='none';document.getElementById('dep-mod-title').textContent='Add deposit -- '+records[i].case;document.getElementById('da-amt').value='';document.getElementById('da-note').value='';document.getElementById('da-date').value=localISO(new Date());document.getElementById('dep-modal').style.display='block';}
+function openDep(i){depIdx=i;document.getElementById('hist-panel').style.display='none';document.getElementById('dep-edit-modal').style.display='none';document.getElementById('dep-mod-title').textContent='Add deposit -- '+records[i].case;document.getElementById('da-amt').value='';document.getElementById('da-note').value='';document.getElementById('da-date').value=localISO(new Date());showPanel('dep-modal');}
 
 function saveDep(){
   var amt=parseFloat(document.getElementById('da-amt').value)||0;if(amt<=0){alert('Enter amount > 0.');return;}
@@ -1581,7 +1583,7 @@ function openHist(i){
   document.getElementById('hist-list').innerHTML=h.length
     ?hHTML+'<div style="padding-top:8px;font-size:12px;color:#666;">Total deposited: <strong>'+f$I(tot)+'</strong></div>'
     :'<div class="empty">No deposit history.</div>';
-  document.getElementById('hist-panel').style.display='block';
+  showPanel('hist-panel');
 }
 
 function editDep(projIdx, depGlobalIdx){
@@ -1593,7 +1595,8 @@ function editDep(projIdx, depGlobalIdx){
   var dv=toInputDate(dep.date);
   document.getElementById('dep-edit-date').value=dv;
   document.getElementById('hist-panel').style.display='none';
-  document.getElementById('dep-edit-modal').style.display='block';
+  showPanel('dep-edit-modal');
+  document.getElementById('dep-edit-amt').focus({preventScroll:true});
 }
 
 function saveDepEdit(){

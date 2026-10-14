@@ -195,56 +195,80 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#185FA5;box-sh
 .pin-hint{font-size:11px;color:#999;margin-top:16px;}
 </style>
 
-<!-- PIN logic defined immediately in head — before any body content -->
+<!-- PIN screen logic. The PIN itself is checked by the Google script (see apps-script/Code.gs) -->
 <script>
-var APP_PIN = '7291';
 var pinEntry = '';
+var pinBusy = false;
+var PIN_MIN = 4, PIN_MAX = 8;
 
 function pinKey(digit) {
-  if (pinEntry.length >= 4) return;
+  if (pinBusy || pinEntry.length >= PIN_MAX) return;
   pinEntry += digit;
+  setPinError('');
   updatePinDots();
-  if (pinEntry.length === 4) { setTimeout(checkPin, 120); }
 }
 function pinBack() {
+  if (pinBusy) return;
   pinEntry = pinEntry.slice(0, -1);
+  setPinError('');
   updatePinDots();
-  var e = document.getElementById('pin-error');
-  if (e) e.textContent = '';
 }
 function pinClear() {
+  if (pinBusy) return;
+  pinEntry = '';
+  setPinError('');
+  updatePinDots();
+}
+function setPinError(msg) {
+  var e = document.getElementById('pin-error');
+  if (e) e.textContent = msg;
+}
+function updatePinDots(isError) {
+  var box = document.getElementById('pin-dots');
+  if (!box) return;
+  var n = Math.max(PIN_MIN, pinEntry.length), html = '';
+  for (var i = 0; i < n; i++) {
+    html += '<div class="pin-dot' + (isError ? ' error' : (i < pinEntry.length ? ' filled' : '')) + '"></div>';
+  }
+  box.innerHTML = html;
+}
+function showPinScreen(msg) {
   pinEntry = '';
   updatePinDots();
-  var e = document.getElementById('pin-error');
-  if (e) e.textContent = '';
-}
-function updatePinDots() {
-  for (var i = 0; i < 4; i++) {
-    var d = document.getElementById('pd' + i);
-    if (!d) continue;
-    if (i < pinEntry.length) {
-      d.style.background = '#185FA5';
-    } else {
-      d.style.background = '#e0e0e0';
-    }
-  }
+  setPinError(msg || '');
+  var ps = document.getElementById('pin-screen');
+  if (ps) ps.style.display = 'flex';
 }
 function checkPin() {
-  if (pinEntry === APP_PIN) {
-    sessionStorage.setItem('sj_pin_ok', '1');
+  if (pinBusy) return;
+  if (pinEntry.length < PIN_MIN) { setPinError('Enter at least ' + PIN_MIN + ' digits'); return; }
+  pinBusy = true;
+  setPinError('');
+  var btn = document.getElementById('pin-go');
+  if (btn) btn.textContent = 'Checking...';
+  unlockWithPin(pinEntry).then(function() {
     var ps = document.getElementById('pin-screen');
     if (ps) ps.style.display = 'none';
-    if (typeof init === 'function') init();
-  } else {
-    for (var i = 0; i < 4; i++) {
-      var d = document.getElementById('pd' + i);
-      if (d) d.style.background = '#E24B4A';
-    }
-    var e = document.getElementById('pin-error');
-    if (e) e.textContent = 'Incorrect PIN — try again';
-    setTimeout(function() { pinEntry = ''; updatePinDots(); }, 900);
-  }
+    pinEntry = '';
+    updatePinDots();
+    init();
+  }).catch(function(err) {
+    // Start over right away (red dots stay until the next key) so fast typing isn't lost
+    pinEntry = '';
+    updatePinDots(true);
+    setPinError(err.message);
+  }).then(function() {
+    pinBusy = false;
+    if (btn) btn.textContent = 'Unlock';
+  });
 }
+document.addEventListener('keydown', function(e) {
+  var ps = document.getElementById('pin-screen');
+  if (!ps || ps.style.display === 'none') return;
+  if (/^[0-9]$/.test(e.key)) pinKey(e.key);
+  else if (e.key === 'Backspace') pinBack();
+  else if (e.key === 'Enter') checkPin();
+});
 </script>
 
 </head>
@@ -259,12 +283,7 @@ function checkPin() {
     </div>
     <div class="pin-title">Enter access PIN</div>
     <div class="pin-subtitle">Contact your division lead if you need the PIN</div>
-    <div class="pin-dots" id="pin-dots">
-      <div class="pin-dot" id="pd0" style="width:14px;height:14px;border-radius:50%;background:#e0e0e0;display:inline-block;"></div>
-      <div class="pin-dot" id="pd1" style="width:14px;height:14px;border-radius:50%;background:#e0e0e0;display:inline-block;"></div>
-      <div class="pin-dot" id="pd2" style="width:14px;height:14px;border-radius:50%;background:#e0e0e0;display:inline-block;"></div>
-      <div class="pin-dot" id="pd3" style="width:14px;height:14px;border-radius:50%;background:#e0e0e0;display:inline-block;"></div>
-    </div>
+    <div class="pin-dots" id="pin-dots"><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div></div>
     <div class="pin-keypad">
       <button class="pin-key" onclick="pinKey('1')">1</button><button class="pin-key" onclick="pinKey('2')">2</button><button class="pin-key" onclick="pinKey('3')">3</button>
       <button class="pin-key" onclick="pinKey('4')">4</button><button class="pin-key" onclick="pinKey('5')">5</button><button class="pin-key" onclick="pinKey('6')">6</button>
@@ -273,6 +292,7 @@ function checkPin() {
       <button class="pin-key" onclick="pinKey('0')">0</button>
       <button class="pin-key" onclick="pinBack()" style="font-size:13px;color:#666;">&#9003;</button>
     </div>
+    <button class="btn btn-primary" id="pin-go" onclick="checkPin()" style="width:100%;max-width:220px;justify-content:center;">Unlock</button>
     <div class="pin-error" id="pin-error"></div>
     <div class="pin-hint">Session stays unlocked until you close this tab</div>
   </div>
@@ -797,6 +817,7 @@ function api(params) {
     var cbName = 'sjcb_' + Date.now() + '_' + Math.floor(Math.random()*10000);
     var qs = new URLSearchParams();
     qs.set('callback', cbName);
+    qs.set('token', sessionStorage.getItem('sj_token') || '');
     if (params.method === 'GET') {
       var keys = Object.keys(params.query);
       for (var i=0; i<keys.length; i++) qs.set(keys[i], params.query[keys[i]]);
@@ -806,12 +827,29 @@ function api(params) {
     }
     var timer = setTimeout(function() { cleanup(); setSyncStatus('err','Timed out'); reject(new Error('timeout')); }, 15000);
     function cleanup() { clearTimeout(timer); delete window[cbName]; var s=document.getElementById('jsonp_'+cbName); if(s)s.remove(); }
-    window[cbName] = function(data) { cleanup(); if(data.success){setSyncStatus('ok');resolve(data.data);}else{setSyncStatus('err',data.error);reject(new Error(data.error));} };
+    window[cbName] = function(data) {
+      cleanup();
+      if(data.success){setSyncStatus('ok');resolve(data.data);return;}
+      // PIN changed (or token missing): ask for the PIN again; queued changes stay queued
+      if(data.code==='AUTH'){sessionStorage.removeItem('sj_token');showPinScreen('Please enter the PIN again');}
+      setSyncStatus('err',data.error);reject(new Error(data.error));
+    };
     var script = document.createElement('script');
     script.id = 'jsonp_'+cbName;
     script.src = SCRIPT_URL+'?'+qs.toString();
     script.onerror = function(){cleanup();setSyncStatus('err','Load failed');reject(new Error('load failed'));};
     document.head.appendChild(script);
+  });
+}
+
+// Asks the Google script to check the PIN; on success keeps its token for this tab
+function unlockWithPin(pin) {
+  return api({method:'GET', query:{action:'checkPin', pin:pin}}).then(function(res) {
+    if (!res || !res.token) throw new Error('The Google script needs updating before the PIN can be checked');
+    sessionStorage.setItem('sj_token', res.token);
+  }, function(e) {
+    if (e.message === 'timeout' || e.message === 'load failed') throw new Error('Can\'t reach Google Sheets -- check your connection');
+    throw e;
   });
 }
 
@@ -2344,7 +2382,7 @@ if ('serviceWorker' in navigator) {
 }
 
 (function(){
-  if(sessionStorage.getItem('sj_pin_ok')==='1'){
+  if(sessionStorage.getItem('sj_token')){
     var ps=document.getElementById('pin-screen');if(ps)ps.style.display='none';
     init();
   }

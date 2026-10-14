@@ -7,6 +7,9 @@
 // 2. Select all existing code → Delete → Paste this file
 // 3. Save (floppy disk)
 // 4. Deploy → Manage Deployments → pencil → New version → Deploy
+// 5. Project Settings (gear icon) → Script Properties → add
+//    Property: APP_PIN   Value: the access PIN (digits only, 4–8)
+//    Changing APP_PIN later signs everyone out.
 // ============================================================
 
 const SHEET_NAME_PROJECTS = 'Projects';
@@ -14,6 +17,9 @@ const SHEET_NAME_SESSIONS = 'Sessions';
 const SHEET_NAME_DEPOSITS = 'DepositHistory';
 const SHEET_NAME_PLANNERS = 'Planners';
 const SHEET_NAME_AILOG    = 'AILog';
+
+const MAX_PIN_TRIES = 5;      // wrong PINs allowed before a lockout
+const PIN_LOCK_SECONDS = 900;  // 15 minutes
 
 const WRITE_ACTIONS = {
   saveSession: saveSession,
@@ -45,6 +51,14 @@ function doGet(e) {
     if (action === 'ping') {
       result = { status: 'ok' };
 
+    } else if (action === 'checkPin') {
+      result = checkPin(p.pin);
+
+    } else if (!hasValidToken(p.token)) {
+      const err = new Error('Locked -- enter the PIN');
+      err.code = 'AUTH';
+      throw err;
+
     } else if (action === 'getAll') {
       result = getAllData();
 
@@ -70,11 +84,56 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JAVASCRIPT);
 
   } catch (ex) {
-    const json = JSON.stringify({ success: false, error: ex.message });
+    const json = JSON.stringify({ success: false, error: ex.message, code: ex.code || '' });
     return ContentService
       .createTextOutput(callback + '(' + json + ')')
       .setMimeType(ContentService.MimeType.JAVASCRIPT);
   }
+}
+
+// ------------------------------------------------------------
+// Access PIN
+// The PIN lives only in Script Properties. A correct PIN gets back a
+// token signed with the PIN; every other request must carry it, so
+// changing APP_PIN invalidates every token at once.
+// ------------------------------------------------------------
+
+function getPin() {
+  const pin = PropertiesService.getScriptProperties().getProperty('APP_PIN');
+  if (!pin) throw new Error('PIN not set up yet -- add APP_PIN under Project Settings → Script Properties');
+  return String(pin).trim();
+}
+
+function signToken(nonce, pin) {
+  return Utilities.computeHmacSha256Signature(nonce, pin)
+    .map(b => ('0' + (b & 255).toString(16)).slice(-2)).join('');
+}
+
+function checkPin(pin) {
+  const appPin = getPin();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const cache = CacheService.getScriptCache();
+    const fails = Number(cache.get('pinFails')) || 0;
+    if (fails >= MAX_PIN_TRIES) throw new Error('Too many wrong tries -- wait 15 minutes and try again');
+    if (String(pin || '') !== appPin) {
+      cache.put('pinFails', String(fails + 1), PIN_LOCK_SECONDS);
+      throw new Error(fails + 1 >= MAX_PIN_TRIES
+        ? 'Too many wrong tries -- wait 15 minutes and try again'
+        : 'Incorrect PIN -- try again');
+    }
+    cache.remove('pinFails');
+    const nonce = Utilities.getUuid();
+    return { token: nonce + '.' + signToken(nonce, appPin) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function hasValidToken(token) {
+  const parts = String(token || '').split('.');
+  return parts.length === 2 && signToken(parts[0], getPin()) === parts[1];
 }
 
 // Keep doPost as fallback

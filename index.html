@@ -819,9 +819,58 @@ function setSyncStatus(state, msg) {
   var dot=document.getElementById('sync-dot'), lbl=document.getElementById('sync-lbl');
   if(!dot||!lbl) return;
   dot.className='sync-dot '+state;
-  if(state==='ok') lbl.textContent='Synced to Google Sheets';
+  var pend=getOutbox().length;
+  if(state==='ok'&&pend){dot.className='sync-dot syncing';lbl.textContent='Syncing -- '+pend+' change'+(pend>1?'s':'')+' waiting';}
+  else if(state==='ok') lbl.textContent='Synced to Google Sheets';
   else if(state==='syncing') lbl.textContent='Syncing...';
-  else lbl.textContent='Offline -- '+(msg||'');
+  else lbl.textContent='Offline -- '+(msg||'')+(pend?' ('+pend+' change'+(pend>1?'s':'')+' waiting to sync)':'');
+}
+
+// ── Outbox: writes are queued locally and sent in order ────────
+// A change stays in the queue until the Sheet confirms it, so nothing is
+// lost when offline or when a request times out. IDs are made here (not by
+// the Sheet) so a retried write is recognised and not saved twice.
+function newId(prefix){return prefix+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);}
+function getOutbox(){try{return JSON.parse(localStorage.getItem('sj_outbox')||'[]');}catch(e){return [];}}
+function setOutbox(q){localStorage.setItem('sj_outbox',JSON.stringify(q));}
+function apiWrite(action,data){
+  var q=getOutbox();q.push({qid:newId('q'),action:action,data:data});setOutbox(q);
+  return flushOutbox();
+}
+var flushing=null;
+function flushOutbox(){
+  if(flushing) return flushing.then(function(){return getOutbox().length?flushOutbox():null;});
+  function next(){
+    var q=getOutbox();
+    if(!q.length){flushing=null;setSyncStatus('ok');return null;}
+    var item=q[0];
+    return api({method:'POST',body:{action:item.action,data:item.data}}).then(function(){
+      setOutbox(getOutbox().filter(function(x){return x.qid!==item.qid;}));
+      return next();
+    });
+  }
+  flushing=Promise.resolve().then(next).catch(function(e){flushing=null;setSyncStatus('err',e.message);throw e;});
+  return flushing;
+}
+window.addEventListener('online',function(){flushOutbox().catch(function(){});});
+
+// Sends any queued changes first, then replaces local data with the Sheet's.
+// If the queue can't be sent, local data is kept so unsynced work stays visible.
+function loadFromSheet(){
+  return flushOutbox().then(function(){return api({method:'GET',query:{action:'getAll'}});}).then(function(data){
+    if(data&&data.projects) records=data.projects;
+    if(data&&data.sessions) sessions=data.sessions;
+    if(data&&data.deposits) deposits=data.deposits;
+    if(data&&data.planners&&data.planners.length) planners=data.planners;
+    if(data&&data.aiLogs) aiLogs=data.aiLogs;
+    reconcileParentIds();
+    localStorage.setItem('sj_records',JSON.stringify(records));
+    localStorage.setItem('sj_sessions',JSON.stringify(sessions));
+    localStorage.setItem('sj_deposits',JSON.stringify(deposits));
+    localStorage.setItem('sj_ai_logs',JSON.stringify(aiLogs));
+    setSyncStatus('ok');
+    return data;
+  });
 }
 
 // ── Boot ──────────────────────────────────────────────────────
@@ -843,22 +892,11 @@ function bootApp() {
     }
   }
   var wm=document.getElementById('ws-month'); if(wm) wm.value=now.getMonth();
-  var md=document.getElementById('m-date'); if(md) md.value=now.toISOString().split('T')[0];
+  var md=document.getElementById('m-date'); if(md) md.value=localISO(now);
   setSyncStatus('syncing');
   setTimeout(function() {
-    api({method:'GET', query:{action:'getAll'}})
-      .then(function(data) {
-        if(data&&data.projects) records=data.projects;
-        if(data&&data.sessions) sessions=data.sessions;
-        if(data&&data.deposits) deposits=data.deposits;
-        if(data&&data.planners&&data.planners.length) planners=data.planners;
-        if(data&&data.aiLogs) aiLogs=data.aiLogs;
-        reconcileParentIds();
-        localStorage.setItem('sj_records',JSON.stringify(records));
-        localStorage.setItem('sj_sessions',JSON.stringify(sessions));
-        localStorage.setItem('sj_deposits',JSON.stringify(deposits));
-        localStorage.setItem('sj_ai_logs',JSON.stringify(aiLogs));
-        setSyncStatus('ok');
+    loadFromSheet()
+      .then(function() {
         renderPlannerDropdowns();
         buildProjOptCache();
         rDrop();
@@ -876,6 +914,16 @@ function f$(n){return '$'+Math.max(0,n).toLocaleString('en-US',{minimumFractionD
 function f$I(n){return '$'+Math.max(0,n).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});}
 function fHrs(secs){return (secs/3600).toFixed(1)+' hrs';}
 function tod(){return new Date().toLocaleDateString('en-US');}
+// YYYY-MM-DD in local time (for <input type=date>); toISOString() would give the UTC date
+function localISO(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+// Any stored date (M/D/YYYY, YYYY-MM-DD, ISO timestamp from Sheets) -> YYYY-MM-DD, or '' if unreadable
+function toInputDate(v){
+  if(!v) return '';
+  var m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m) return v;
+  var dt=new Date(v);
+  return isNaN(dt.getTime())?'':localISO(dt);
+}
 // Round raw seconds to nearest 15-minute (quarter-hour) increment
 function roundQ(secs){return Math.round(secs/900)*900;}
 function fmtDate(d){if(!d)return '';var dt=new Date(d);if(isNaN(dt.getTime()))return String(d);return (dt.getMonth()+1)+'/'+dt.getDate()+'/'+dt.getFullYear();}
@@ -1051,12 +1099,12 @@ function stopTimer(){
     var proj=records[aProjIdx],plan=records[aPlanIdx];
     var rounded=roundQ(elapsed);
     var charge=parseFloat(((rounded/3600)*RATE).toFixed(2));
-    var sdata={recIdx:String(aPlanIdx),projCase:proj.case,projName:proj.name,case:plan.case,name:plan.name,rectype:'plan',activity:document.getElementById('t-act').value||'Review',note:document.getElementById('t-note').value.trim(),planner:document.getElementById('t-planner').value,seconds:rounded,charge:charge,date:tod(),source:'timer'};
+    var sdata={id:newId('s'),recIdx:String(aPlanIdx),projCase:proj.case,projName:proj.name,case:plan.case,name:plan.name,rectype:'plan',activity:document.getElementById('t-act').value||'Review',note:document.getElementById('t-note').value.trim(),planner:document.getElementById('t-planner').value,seconds:rounded,charge:charge,date:tod(),source:'timer'};
     plan.spent=parseFloat((Number(plan.spent)+charge).toFixed(2));
     sessions.push(sdata);
     localStorage.setItem('sj_sessions',JSON.stringify(sessions));
     localStorage.setItem('sj_records',JSON.stringify(records));
-    api({method:'POST',body:{action:'saveSession',data:sdata}}).then(function(res){sdata.id=res.id;}).catch(function(){});
+    apiWrite('saveSession',sdata).catch(function(){});
   }
   elapsed=0;running=false;paused=false;
   document.getElementById('tdisp').textContent='00:00:00';
@@ -1132,12 +1180,12 @@ function saveMan(){
   var proj=records[projIdx],plan=records[planIdx];
   var charge=parseFloat(((secs/3600)*RATE).toFixed(2));
   var ds=new Date(dv+'T12:00:00').toLocaleDateString('en-US');
-  var sdata={recIdx:String(planIdx),projCase:proj.case,projName:proj.name,case:plan.case,name:plan.name,rectype:'plan',activity:document.getElementById('m-act').value||'Review',note:document.getElementById('m-note').value.trim(),planner:document.getElementById('m-planner').value,seconds:secs,charge:charge,date:ds,source:'manual'};
+  var sdata={id:newId('s'),recIdx:String(planIdx),projCase:proj.case,projName:proj.name,case:plan.case,name:plan.name,rectype:'plan',activity:document.getElementById('m-act').value||'Review',note:document.getElementById('m-note').value.trim(),planner:document.getElementById('m-planner').value,seconds:secs,charge:charge,date:ds,source:'manual'};
   plan.spent=parseFloat((Number(plan.spent)+charge).toFixed(2));
   sessions.push(sdata);
   localStorage.setItem('sj_sessions',JSON.stringify(sessions));
   localStorage.setItem('sj_records',JSON.stringify(records));
-  api({method:'POST',body:{action:'saveSession',data:sdata}}).then(function(res){sdata.id=res.id;}).catch(function(){});
+  apiWrite('saveSession',sdata).catch(function(){});
   var t=document.getElementById('man-toast');
   t.textContent='Saved: '+fHM(secs)+' on '+plan.case+' ('+f$(charge)+')';
   t.style.display='block';setTimeout(function(){t.style.display='none';},4000);
@@ -1214,7 +1262,7 @@ function delSession(ri){
       localStorage.setItem('sj_records',JSON.stringify(records));
     }
     if(s.id){
-      api({method:'POST',body:{action:'deleteSession',data:{id:s.id}}}).catch(function(){});
+      apiWrite('deleteSession',{id:s.id}).catch(function(){});
     }
     sessions.splice(ri,1);
     localStorage.setItem('sj_sessions',JSON.stringify(sessions));
@@ -1465,11 +1513,12 @@ function addPlan(){
   var parIdx=parseInt(document.getElementById('np-par').value);
 
   function savePlanWithParent(projRecord){
-    var planData={id:'local_plan_'+Date.now(),rectype:'plan',case:c,name:n,applicant:app,deposit:dep,spent:0,type:type,parentId:projRecord.id,parentCase:projRecord.case};
+    var planData={id:newId('p'),rectype:'plan',case:c,name:n,applicant:app,deposit:dep,spent:0,type:type,parentId:projRecord.id,parentCase:projRecord.case};
     records.push(planData);
     localStorage.setItem('sj_records',JSON.stringify(records));
-    if(dep>0){var ddata={projectId:planData.id,projectCase:c,amount:dep,note:'Initial deposit',date:tod()};deposits.push(ddata);localStorage.setItem('sj_deposits',JSON.stringify(deposits));api({method:'POST',body:{action:'addDeposit',data:ddata}}).catch(function(){});}
-    api({method:'POST',body:{action:'addProject',data:planData}}).then(function(res){planData.id=res.id;localStorage.setItem('sj_records',JSON.stringify(records));}).catch(function(){});
+    apiWrite('addProject',planData).catch(function(){});
+    // The plan row already carries the starting deposit, so this history entry must not add it again
+    if(dep>0){var ddata={id:newId('d'),projectId:planData.id,projectCase:c,amount:dep,note:'Initial deposit',date:tod(),adjustTotal:false};deposits.push(ddata);localStorage.setItem('sj_deposits',JSON.stringify(deposits));apiWrite('addDeposit',ddata).catch(function(){});}
     var clrIds=['np-case','np-name','np-app','np-dep','np-proj-case','np-proj-name'];
     for(var ci=0;ci<clrIds.length;ci++){var cel=document.getElementById(clrIds[ci]);if(cel)cel.value='';}
     document.getElementById('np-par').value='';onNpParChange();renderRecTbl();rDrop();
@@ -1485,29 +1534,28 @@ function addPlan(){
     for(var ep=0;ep<records.length;ep++){if(records[ep].rectype==='project'&&records[ep].case===projCase){existingProj=records[ep];break;}}
     if(existingProj){savePlanWithParent(existingProj);}
     else{
-      var projRecord={id:'local_proj_'+Date.now(),rectype:'project',case:projCase,name:projName,applicant:app,deposit:0,spent:0,type:'Project',parentId:'',leadPlanner:leadP};
+      var projRecord={id:newId('p'),rectype:'project',case:projCase,name:projName,applicant:app,deposit:0,spent:0,type:'Project',parentId:'',leadPlanner:leadP};
       records.push(projRecord);localStorage.setItem('sj_records',JSON.stringify(records));
-      api({method:'POST',body:{action:'addProject',data:projRecord}})
-        .then(function(res){projRecord.id=res.id;localStorage.setItem('sj_records',JSON.stringify(records));savePlanWithParent(projRecord);})
-        .catch(function(){savePlanWithParent(projRecord);});
+      apiWrite('addProject',projRecord).catch(function(){});
+      savePlanWithParent(projRecord);
     }
   }
 }
 
 function togParent(){}
 
-function openDep(i){depIdx=i;document.getElementById('hist-panel').style.display='none';document.getElementById('dep-edit-modal').style.display='none';document.getElementById('dep-mod-title').textContent='Add deposit -- '+records[i].case;document.getElementById('da-amt').value='';document.getElementById('da-note').value='';document.getElementById('da-date').value=new Date().toISOString().split('T')[0];document.getElementById('dep-modal').style.display='block';}
+function openDep(i){depIdx=i;document.getElementById('hist-panel').style.display='none';document.getElementById('dep-edit-modal').style.display='none';document.getElementById('dep-mod-title').textContent='Add deposit -- '+records[i].case;document.getElementById('da-amt').value='';document.getElementById('da-note').value='';document.getElementById('da-date').value=localISO(new Date());document.getElementById('dep-modal').style.display='block';}
 
 function saveDep(){
   var amt=parseFloat(document.getElementById('da-amt').value)||0;if(amt<=0){alert('Enter amount > 0.');return;}
   var dv=document.getElementById('da-date').value,note=document.getElementById('da-note').value.trim()||'Deposit added';
   var r=records[depIdx];
-  var ddata={projectId:r.id,projectCase:r.case,amount:amt,note:note,date:new Date(dv+'T12:00:00').toLocaleDateString('en-US')};
+  var ddata={id:newId('d'),projectId:r.id,projectCase:r.case,amount:amt,note:note,date:new Date(dv+'T12:00:00').toLocaleDateString('en-US')};
   r.deposit=parseFloat((Number(r.deposit)+amt).toFixed(2));
   deposits.push(ddata);
   localStorage.setItem('sj_records',JSON.stringify(records));
   localStorage.setItem('sj_deposits',JSON.stringify(deposits));
-  api({method:'POST',body:{action:'addDeposit',data:ddata}}).catch(function(){});
+  apiWrite('addDeposit',ddata).catch(function(){});
   var t=document.getElementById('dep-toast');t.textContent='Deposit of '+f$I(amt)+' added to '+r.case;t.style.display='block';setTimeout(function(){t.style.display='none';},4000);
   document.getElementById('dep-modal').style.display='none';renderRecTbl();rDrop();
 }
@@ -1524,7 +1572,7 @@ function openHist(i){
     hHTML+='<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:12px;">'
       +'<span class="badge b-green">+'+f$I(dep.amount)+'</span>'
       +'<span style="flex:1;">'+dep.note+'</span>'
-      +'<span style="color:#666;margin-right:8px;">'+dep.date+'</span>'
+      +'<span style="color:#666;margin-right:8px;">'+fmtDate(dep.date)+'</span>'
       +'<button class="btn btn-sm" onclick="editDep('+i+','+gi+')">Edit</button>'
       +'<button class="btn btn-sm btn-danger" onclick="deleteDeposit('+i+','+gi+')">Del</button>'
       +'</div>';
@@ -1542,7 +1590,7 @@ function editDep(projIdx, depGlobalIdx){
   document.getElementById('dep-edit-dep-idx').value=depGlobalIdx;
   document.getElementById('dep-edit-amt').value=dep.amount;
   document.getElementById('dep-edit-note').value=dep.note;
-  var dv=dep.date?new Date(dep.date+'T12:00:00').toISOString().split('T')[0]:'';
+  var dv=toInputDate(dep.date);
   document.getElementById('dep-edit-date').value=dv;
   document.getElementById('hist-panel').style.display='none';
   document.getElementById('dep-edit-modal').style.display='block';
@@ -1563,6 +1611,8 @@ function saveDepEdit(){
   records[projIdx].deposit=parseFloat((Number(records[projIdx].deposit)+diff).toFixed(2));
   localStorage.setItem('sj_deposits',JSON.stringify(deposits));
   localStorage.setItem('sj_records',JSON.stringify(records));
+  var de=deposits[depIdx2];
+  if(de.id) apiWrite('updateDeposit',{id:de.id,amount:de.amount,note:de.note,date:de.date}).catch(function(){});
   document.getElementById('dep-edit-modal').style.display='none';
   renderRecTbl();openHist(projIdx);
 }
@@ -1571,6 +1621,7 @@ function deleteDeposit(projIdx, depGlobalIdx){
   if(!confirm('Delete this deposit entry? The amount will be subtracted from the plan balance.'))return;
   var amt=Number(deposits[depGlobalIdx].amount);
   records[projIdx].deposit=Math.max(0,parseFloat((Number(records[projIdx].deposit)-amt).toFixed(2)));
+  if(deposits[depGlobalIdx].id) apiWrite('deleteDeposit',{id:deposits[depGlobalIdx].id}).catch(function(){});
   deposits.splice(depGlobalIdx,1);
   localStorage.setItem('sj_deposits',JSON.stringify(deposits));
   localStorage.setItem('sj_records',JSON.stringify(records));
@@ -1579,7 +1630,7 @@ function deleteDeposit(projIdx, depGlobalIdx){
 
 function delRec(i){
   if(!confirm('Remove "'+records[i].case+'"?'))return;
-  api({method:'POST',body:{action:'deleteProject',data:{id:records[i].id}}}).catch(function(){});
+  apiWrite('deleteProject',{id:records[i].id}).catch(function(){});
   records.splice(i,1);localStorage.setItem('sj_records',JSON.stringify(records));renderRecTbl();rDrop();
 }
 
@@ -1604,17 +1655,9 @@ function reconcileParentIds(){
 
 function syncFromSheet(){
   var btn=event.target;btn.disabled=true;btn.textContent='Syncing...';setSyncStatus('syncing');
-  api({method:'GET',query:{action:'getAll'}})
-    .then(function(data){
-      if(data&&data.projects)records=data.projects;
-      if(data&&data.sessions)sessions=data.sessions;
-      if(data&&data.deposits)deposits=data.deposits;
-      if(data&&data.planners&&data.planners.length)planners=data.planners;
-      reconcileParentIds();
-      localStorage.setItem('sj_records',JSON.stringify(records));
-      localStorage.setItem('sj_sessions',JSON.stringify(sessions));
-      localStorage.setItem('sj_deposits',JSON.stringify(deposits));
-      setSyncStatus('ok');renderPlannerDropdowns();renderPlannerListUI();buildProjOptCache();renderRecTbl();rDrop();updMetrics();
+  loadFromSheet()
+    .then(function(){
+      renderPlannerDropdowns();renderPlannerListUI();buildProjOptCache();renderRecTbl();rDrop();updMetrics();
       var res=document.getElementById('sync-result');res.textContent='Sync complete -- '+records.length+' records, '+sessions.length+' sessions.';res.style.display='block';setTimeout(function(){res.style.display='none';},5000);
       btn.disabled=false;btn.textContent='Sync now';
     })
@@ -1628,17 +1671,9 @@ function clearLocalCache(){
   renderRecTbl();rDrop();buildProjOptCache();renderPlannerListUI();updMetrics();
   var res=document.getElementById('sync-result');res.textContent='Cache cleared. Reloading from Sheets...';res.style.display='block';setSyncStatus('syncing');
   setTimeout(function(){
-    api({method:'GET',query:{action:'getAll'}})
-      .then(function(data){
-        if(data&&data.projects)records=data.projects;
-        if(data&&data.sessions)sessions=data.sessions;
-        if(data&&data.deposits)deposits=data.deposits;
-        if(data&&data.planners&&data.planners.length)planners=data.planners;
-        reconcileParentIds();
-        localStorage.setItem('sj_records',JSON.stringify(records));
-        localStorage.setItem('sj_sessions',JSON.stringify(sessions));
-        localStorage.setItem('sj_deposits',JSON.stringify(deposits));
-        setSyncStatus('ok');renderPlannerDropdowns();renderPlannerListUI();buildProjOptCache();renderRecTbl();rDrop();updMetrics();
+    loadFromSheet()
+      .then(function(){
+        renderPlannerDropdowns();renderPlannerListUI();buildProjOptCache();renderRecTbl();rDrop();updMetrics();
         res.textContent='Done -- loaded '+records.length+' records and '+sessions.length+' sessions.';setTimeout(function(){res.style.display='none';},5000);
       })
       .catch(function(){setSyncStatus('err','Could not reach Sheets');res.textContent='Cache cleared but could not reach Sheets.';});
@@ -1991,7 +2026,7 @@ function saveAILog() {
   var planIdx = parseInt(document.getElementById('ai-plan').value);
   var plan = (!isNaN(planIdx) && planIdx >= 0) ? records[planIdx] : null;
   var entry = {
-    id: 'ai_' + Date.now(),
+    id: newId('ai'),
     date: document.getElementById('ai-date').value,
     projCase: proj.case, projName: proj.name,
     planCase: plan ? plan.case : '',
@@ -2002,7 +2037,7 @@ function saveAILog() {
   };
   aiLogs.push(entry);
   localStorage.setItem('sj_ai_logs', JSON.stringify(aiLogs));
-  api({method:'POST',body:{action:'saveAILog',data:entry}}).then(function(res){ if(res&&res.id) entry.id=res.id; }).catch(function(){});
+  apiWrite('saveAILog', entry).catch(function(){});
   var t = document.getElementById('ailog-toast');
   if (t) { t.className='toast'; t.textContent='AI log entry saved for '+proj.case+'.'; t.style.display='block'; setTimeout(function(){ t.style.display='none'; },4000); }
   clearAILog(); renderAILog();
@@ -2054,7 +2089,7 @@ function renderAILog() {
 function delAILog(ri) {
   if (!confirm('Delete this AI log entry?')) return;
   var entry = aiLogs[ri];
-  if (entry && entry.id) api({method:'POST',body:{action:'deleteAILog',data:{id:entry.id}}}).catch(function(){});
+  if (entry && entry.id) apiWrite('deleteAILog', {id:entry.id}).catch(function(){});
   aiLogs.splice(ri, 1);
   localStorage.setItem('sj_ai_logs', JSON.stringify(aiLogs));
   renderAILog();

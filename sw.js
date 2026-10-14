@@ -1,7 +1,7 @@
 // SJ Planning Time Tracker — Service Worker
 // Caches the app shell for offline use and fast loading
 
-var CACHE_NAME = 'sj-tracker-v1';
+var CACHE_NAME = 'sj-tracker-v2';
 var ASSETS = [
   './',
   './index.html',
@@ -40,6 +40,23 @@ self.addEventListener('activate', function(e) {
 self.addEventListener('fetch', function(e) {
   // Don't cache Google Apps Script API calls — always need fresh data
   if (e.request.url.indexOf('script.google.com') > -1) return;
+
+  // The page itself: network first so updates show up on the next load,
+  // cached copy when offline
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).then(function(response) {
+        if (response && response.status === 200) {
+          var clone = response.clone();
+          caches.open(CACHE_NAME).then(function(cache) { cache.put('./index.html', clone); });
+        }
+        return response;
+      }).catch(function() {
+        return caches.match('./index.html');
+      })
+    );
+    return;
+  }
 
   e.respondWith(
     caches.match(e.request).then(function(cached) {
